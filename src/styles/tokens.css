@@ -1,0 +1,98 @@
+/* -------------------------------------------------------------------------
+ * Design tokens
+ * Eén bron van waarheid voor kleur, radius, schaduw en typografie.
+ * Alleen hier staan ruwe waarden. Componenten gebruiken uitsluitend de
+ * Tailwind-utilities die in globals.css aan deze tokens gekoppeld zijn.
+ * ---------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  /* Oppervlakken */
+  --immo-canvas: #f6f7f9;
+  --immo-surface: #ffffff;
+  --immo-surface-subtle: #f1f3f6;
+  --immo-surface-inset: #eaedf2;
+  --immo-border: #e3e7ed;
+  --immo-border-strong: #cdd4de;
+
+  /* Tekst */
+  --immo-fg: #101828;
+  --immo-fg-muted: #5a6478;
+  --immo-fg-subtle: #8b95a7;
+  --immo-fg-inverted: #ffffff;
+
+  /* Merk: rustig, diep petrol. Wordt spaarzaam gebruikt. */
+  --immo-brand: #0f5f57;
+  --immo-brand-hover: #0c4d46;
+  --immo-brand-soft: #e6f2f0;
+  --immo-brand-fg: #ffffff;
+
+  /* Accent: warm, alleen voor highlights (nooit voor grote vlakken) */
+  --immo-accent: #a4762a;
+  --immo-accent-soft: #faf3e6;
+
+  /* Status */
+  --immo-success: #157347;
+  --immo-success-soft: #e7f4ec;
+  --immo-warning: #a86a00;
+  --immo-warning-soft: #fdf3e2;
+  --immo-danger: #b42318;
+  --immo-danger-soft: #fdeceb;
+  --immo-info: #175cd3;
+  --immo-info-soft: #eaf1fd;
+
+  /* Focus */
+  --immo-ring: #0f5f57;
+
+  /* Schaduwen: zacht en laag contrast */
+  --immo-shadow-soft: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+  --immo-shadow-elevated: 0 2px 4px -2px rgb(16 24 40 / 0.04), 0 12px 24px -8px rgb(16 24 40 / 0.12);
+
+  /* Besturingselementen: één hoogteschaal voor knop, input, select en trigger */
+  --control-sm: 2rem;
+  --control-md: 2.375rem;
+  --control-lg: 2.75rem;
+
+  /* Layout */
+  --sidebar-width: 16rem;
+  --topbar-height: 3.75rem;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --immo-canvas: #0a0d12;
+  --immo-surface: #12161e;
+  --immo-surface-subtle: #171c26;
+  --immo-surface-inset: #1d2330;
+  --immo-border: #232a36;
+  --immo-border-strong: #333c4c;
+
+  --immo-fg: #e8ecf3;
+  --immo-fg-muted: #98a2b3;
+  --immo-fg-subtle: #6f7a8c;
+  --immo-fg-inverted: #0a0d12;
+
+  --immo-brand: #3ba597;
+  --immo-brand-hover: #4fb9aa;
+  --immo-brand-soft: #10261f;
+  --immo-brand-fg: #04120f;
+
+  --immo-accent: #d0a659;
+  --immo-accent-soft: #241d10;
+
+  --immo-success: #4ab97a;
+  --immo-success-soft: #11241a;
+  --immo-warning: #d99a3a;
+  --immo-warning-soft: #241c10;
+  --immo-danger: #f27167;
+  --immo-danger-soft: #2a1614;
+  --immo-info: #6ba1f5;
+  --immo-info-soft: #121d31;
+
+  --immo-ring: #3ba597;
+
+  --immo-shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.24);
+  --immo-shadow-elevated: 0 2px 4px -2px rgb(0 0 0 / 0.3), 0 12px 24px -8px rgb(0 0 0 / 0.5);
+}
