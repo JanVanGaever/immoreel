@@ -55,6 +55,55 @@ export async function sendPasswordResetEmail(to: string, link: string): Promise<
   });
 }
 
+/**
+ * Bevestiging van een nieuw e-mailadres, naar het **nieuwe** adres. Pas wie
+ * daar bij de mailbox kan, krijgt het adres op zijn account.
+ */
+export async function sendEmailChangeConfirmation(to: string, link: string): Promise<void> {
+  await deliver({
+    to,
+    link,
+    subject: `Bevestig je nieuwe e-mailadres voor ${APP_NAME}`,
+    body: [
+      "Je vroeg aan om dit adres te gebruiken om in te loggen bij Immoreel.",
+      "Klik op de link hieronder om dat te bevestigen. De link is één uur geldig",
+      "en werkt één keer.",
+      "Niets aangevraagd? Dan hoef je niets te doen: zonder deze klik verandert er niets.",
+    ].join("\n"),
+  });
+}
+
+/**
+ * Waarschuwing naar het **oude** adres. Die mail is het vangnet: wie zijn
+ * account kwijtraakt aan iemand anders, hoort dat te zien op het adres dat hij
+ * nog wél leest.
+ */
+export async function sendEmailChangeNotice(to: string, newEmail: string): Promise<void> {
+  await deliver({
+    to,
+    link: `mailto:${SUPPORT_EMAIL}`,
+    subject: `Er is een ander e-mailadres aangevraagd voor je ${APP_NAME}-account`,
+    body: [
+      `Iemand vroeg aan om ${newEmail} te gebruiken om in te loggen op je account.`,
+      "Was jij dat? Dan hoef je niets te doen.",
+      `Was jij dat niet, verander dan meteen je wachtwoord en mail ${SUPPORT_EMAIL}.`,
+    ].join("\n"),
+  });
+}
+
+/** Bevestiging dat het wachtwoord gewijzigd is. Ook dit hoort gemeld te worden. */
+export async function sendPasswordChangedNotice(to: string): Promise<void> {
+  await deliver({
+    to,
+    link: `mailto:${SUPPORT_EMAIL}`,
+    subject: `Je wachtwoord voor ${APP_NAME} is gewijzigd`,
+    body: [
+      "Het wachtwoord van je account is zonet gewijzigd.",
+      `Was jij dat niet? Mail dan meteen ${SUPPORT_EMAIL}.`,
+    ].join("\n"),
+  });
+}
+
 export type TeamInvite = {
   organisationName: string;
   inviterName: string;

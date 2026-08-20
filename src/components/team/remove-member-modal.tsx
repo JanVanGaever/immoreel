@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { UserMinus } from "lucide-react";
-import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import type { TeamActionState } from "@/lib/team/action-state";
@@ -59,7 +59,7 @@ export function RemoveMemberModal({
       />
 
       <ModalBody className="space-y-3">
-        {error ? <Alert variant="danger" title={error} /> : null}
+        {error ? <ErrorSummary error={error} /> : null}
 
         <p className="text-sm text-fg-muted">
           Bij zijn volgende klik ligt de app er voor hem uit — ook als hij nu nog ingelogd is.

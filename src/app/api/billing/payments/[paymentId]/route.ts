@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
 import { getBillingStore } from "@/db/billing-store";
-import { can } from "@/lib/auth/roles";
-import { getSession } from "@/lib/auth/session";
+import { handle, jsonOk, notFound, requireApiSession } from "@/lib/api";
+import { createLogger } from "@/lib/errors/logger";
 import { applyPayment, loadSubscription } from "@/lib/billing/service";
 import { MollieError } from "@/lib/mollie/client";
+
+const log = createLogger("billing");
 
 /**
  * De stand van één betaling, voor de terugkeerpagina.
@@ -29,39 +30,36 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ paymentId: string }> },
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Niet ingelogd." }, { status: 401 });
-  if (!can(session.role, "billing:manage")) {
-    return NextResponse.json({ error: "Onvoldoende rechten." }, { status: 403 });
-  }
+  return handle(async () => {
+    const session = await requireApiSession("billing:manage");
+    const { paymentId } = await params;
+    const store = getBillingStore();
 
-  const { paymentId } = await params;
-  const store = getBillingStore();
-
-  // Het opzoeken van de afrekening is meteen de controle of ze van deze
-  // organisatie is: een id uit de URL zegt op zichzelf niets.
-  let attempt = await store.findCheckout(paymentId);
-  if (!attempt || attempt.organisationId !== session.organisation.id) {
-    return NextResponse.json({ error: "Onbekende betaling." }, { status: 404 });
-  }
-
-  if (attempt.status === "open") {
-    try {
-      await applyPayment(paymentId);
-      attempt = (await store.findCheckout(paymentId)) ?? attempt;
-    } catch (error) {
-      // Mollie even niet bereikbaar hoeft de pagina niet stuk te maken: die
-      // vraagt het zo meteen opnieuw. De stand die we hebben gaat wel mee.
-      if (!(error instanceof MollieError)) throw error;
-
-      console.warn(`[billing] status ophalen mislukt voor ${paymentId}: ${error.message}`);
+    // Het opzoeken van de afrekening is meteen de controle of ze van deze
+    // organisatie is: een id uit de URL zegt op zichzelf niets.
+    let attempt = await store.findCheckout(paymentId);
+    if (!attempt || attempt.organisationId !== session.organisation.id) {
+      throw notFound("Onbekende betaling.");
     }
-  }
 
-  const subscription = await loadSubscription(session.organisation.id);
+    if (attempt.status === "open") {
+      try {
+        await applyPayment(paymentId);
+        attempt = (await store.findCheckout(paymentId)) ?? attempt;
+      } catch (error) {
+        // Mollie even niet bereikbaar hoeft de pagina niet stuk te maken: die
+        // vraagt het zo meteen opnieuw. De stand die we hebben gaat wel mee.
+        if (!(error instanceof MollieError)) throw error;
 
-  return NextResponse.json(
-    {
+        log.warn("status ophalen bij Mollie mislukt", { paymentId, reason: error.message });
+      }
+    }
+
+    const subscription = await loadSubscription(session.organisation.id);
+
+    // Een betaalstatus uit een cache is geen betaalstatus; `jsonOk` zet overal
+    // `no-store`.
+    return jsonOk({
       paymentId,
       status: attempt.status,
       planId: attempt.planId,
@@ -71,8 +69,6 @@ export async function GET(
       failureReason: attempt.failureReason,
       subscriptionStatus: subscription.status,
       currentPeriodEnd: subscription.currentPeriodEnd,
-    },
-    // Een betaalstatus uit een cache is geen betaalstatus.
-    { headers: { "Cache-Control": "no-store" } },
-  );
+    });
+  });
 }

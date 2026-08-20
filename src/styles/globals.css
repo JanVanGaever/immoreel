@@ -106,3 +106,56 @@
     background-position: -1px -1px;
   }
 }
+
+@layer base {
+  /* -----------------------------------------------------------------------
+   * Aanraakschermen
+   * -------------------------------------------------------------------- */
+
+  /* iOS zoomt het hele scherm in zodra je een veld met tekst kleiner dan 16px
+     aanraakt, en zoomt daarna niet vanzelf terug. Op een aanraakscherm gaan de
+     velden daarom naar 16px; op een muisscherm blijft de dichte schaal staan. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  /* Het grijze blokje dat Android over een aangeraakte knop legt; de eigen
+     hover- en focusstijlen doen dit werk al. */
+  a,
+  button,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Wie beweging heeft uitgezet, krijgt geen pulserende skeletten of
+     schuivende panelen meer te zien. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Een strook die horizontaal schuift zonder zichtbare scrollbalk: voor
+     tabbladen en de tijdlijn, waar de balk zelf meer ruimte kost dan hij
+     waard is. */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .scroll-x::-webkit-scrollbar {
+    display: none;
+  }
+}

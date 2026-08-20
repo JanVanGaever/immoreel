@@ -18,6 +18,38 @@ export type MediaAsset = {
   thumbnailUrl?: string | null;
 } & Timestamps;
 
+/**
+ * Een bestand in de opslag dat bij één project hoort.
+ *
+ * Het verschil met `MediaAsset` is de eigenaar. Een `MediaAsset` hoort bij het
+ * kantoor en kan aan een pand hangen; dit hoort bij één video en heeft een
+ * plek in de rij. Foto's worden per project geüpload, en de volgorde waarin ze
+ * binnenkomen is de eerste montage — vandaar `position`.
+ *
+ * `position` is niet hetzelfde als de volgorde van de scènes: de scènes zijn de
+ * tijdlijn en mogen daarvan afwijken (een foto twee keer gebruiken, of geen
+ * enkele keer). Bij het herschikken lopen ze wel samen op; zie
+ * `src/lib/projects/assets.ts`.
+ */
+export type ProjectAsset = {
+  id: ID;
+  organisationId: ID;
+  projectId: ID;
+  /** Wie het bestand geüpload heeft; `null` als die gebruiker weg is. */
+  uploadedBy?: ID | null;
+  kind: MediaKind;
+  fileName: string;
+  mimeType: string;
+  sizeInBytes: number;
+  width?: number | null;
+  height?: number | null;
+  durationInSeconds?: number | null;
+  /** Sleutel in de opslag. Uniek: twee rijen claimen nooit hetzelfde bestand. */
+  storageKey: string;
+  thumbnailUrl?: string | null;
+  position: number;
+} & Timestamps;
+
 export type AspectRatio = "16:9" | "9:16" | "1:1" | "4:5";
 
 export type ProjectStatus =

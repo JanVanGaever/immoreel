@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isSeedEnabled, seedMemberships, seedOrganisation, seedUsers } from "@/db/seed";
 import type {
   AuthToken,
   AuthTokenPurpose,
@@ -24,6 +25,15 @@ export type AuthStore = {
   createAccount(input: CreateAccountInput): Promise<CreateAccountResult>;
   setPasswordHash(userId: ID, passwordHash: string): Promise<void>;
   setUserName(userId: ID, name: string): Promise<void>;
+  /** Het adres waarmee ingelogd wordt. Alleen na bevestiging op het nieuwe adres. */
+  setUserEmail(userId: ID, email: string): Promise<void>;
+  /**
+   * Wist de gebruiker, zijn lidmaatschappen en zijn openstaande tokens.
+   * Onomkeerbaar; de aanroeper controleert of het mag.
+   */
+  deleteAccount(userId: ID): Promise<void>;
+  /** Voor het kantoor dat leegloopt omdat zijn laatste lid vertrekt. */
+  deleteOrganisation(organisationId: ID): Promise<void>;
   markEmailVerified(userId: ID): Promise<void>;
   /** De organisatie waarin de gebruiker werkt. Voorlopig één per gebruiker. */
   findMembershipByUser(userId: ID): Promise<Membership | null>;
@@ -37,7 +47,22 @@ export type AuthStore = {
   createMembership(input: CreateMembershipInput): Promise<Membership>;
   updateMembershipRole(membershipId: ID, role: Role): Promise<Membership | null>;
   deleteMembership(membershipId: ID): Promise<void>;
+  /* --- Intern: over alle organisaties heen ------------------------------ */
+  /**
+   * Alleen voor het interne supportpaneel (`src/db/admin-store.ts`).
+   *
+   * De rest van de app leest nooit over organisaties heen — daar begint elke
+   * query bij een `organisationId`, en dat is wat een klant van de ene kant
+   * houdt bij de andere. Deze drie staan er apart onder, zodat bij een review
+   * meteen zichtbaar is wie ze aanroept.
+   */
+  listAllUsers(): Promise<UserRecord[]>;
+  listAllOrganisations(): Promise<Organisation[]>;
+  listAllMemberships(): Promise<Membership[]>;
+
   createAuthToken(input: CreateAuthTokenInput): Promise<AuthToken>;
+  /** Het openstaande token van dit doel, om te tonen wat er nog te bevestigen valt. */
+  findOpenAuthToken(userId: ID, purpose: AuthTokenPurpose): Promise<AuthToken | null>;
   /** Geeft het token terug en markeert het meteen als gebruikt (eenmalig). */
   consumeAuthToken(purpose: AuthTokenPurpose, tokenHash: string): Promise<AuthToken | null>;
   /** Trekt openstaande tokens in, bijvoorbeeld na een geslaagde wachtwoordreset. */
@@ -76,6 +101,8 @@ export type CreateAuthTokenInput = {
   purpose: AuthTokenPurpose;
   tokenHash: string;
   expiresAt: Date;
+  /** Alleen bij `email-change`: het adres dat na bevestiging het nieuwe wordt. */
+  email?: string;
 };
 
 /** Rol die de aanmaker van een organisatie krijgt. */
@@ -124,91 +151,23 @@ function getData(): MemoryData {
 }
 
 /**
- * Eén demoaccount zodat de auth-schermen meteen te proberen zijn:
- * demo@immoreel.be met wachtwoord Immoreel2026!
- * Buiten development wordt er niets geseed.
+ * De beginstand van development: het demokantoor met zijn drie mensen.
+ *
+ * De data zelf staat in `src/db/seed/` en niet meer hier. Dat is wat de
+ * dashboardstore, de projectstore en deze store naar dezelfde organisatie laat
+ * wijzen — vroeger had elk van hen zijn eigen demokantoor, met andere ids.
+ *
+ * Alle drie de gebruikers hebben een wachtwoord (`SEED_PASSWORD`), zodat je
+ * rollen kunt uitproberen door in te loggen als de editor of de kijker.
  */
 function seed(data: MemoryData): MemoryData {
-  if (process.env.NODE_ENV === "production") return data;
+  if (!isSeedEnabled()) return data;
 
-  const now = new Date().toISOString();
-  const userId = "usr_demo";
-  const organisationId = "org_demo";
+  const organisation = seedOrganisation();
+  data.organisations.set(organisation.id, organisation);
 
-  data.users.set(userId, {
-    id: userId,
-    email: "demo@immoreel.be",
-    name: "Demo Gebruiker",
-    avatarUrl: null,
-    emailVerifiedAt: now,
-    passwordHash:
-      "scrypt$16384$8$1$TTlrri4u_WkrWvEesVvhBg$Ct2xMR8TOH6oF6pC3s6oDaM3At8JLgVqlHfaRfJq5afMN-eFvmzc4xQ2KiSsc-hpTJX3eAhjRAZ_MWfg7MKjUQ",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  data.organisations.set(organisationId, {
-    id: organisationId,
-    name: "Demo Vastgoed",
-    slug: "demo-vastgoed",
-    vatNumber: null,
-    logoUrl: null,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  data.memberships.set("mem_demo", {
-    id: "mem_demo",
-    userId,
-    organisationId,
-    role: "owner",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // Twee collega's, zodat de teampagina in development meer laat zien dan één
-  // rij met jezelf erin. Ze hebben geen wachtwoord: inloggen doen ze niet, ze
-  // staan er om rollen, badges en verwijderen te kunnen proberen.
-  const colleagues: { id: ID; membershipId: ID; name: string; email: string; role: Role }[] = [
-    {
-      id: "usr_demo_editor",
-      membershipId: "mem_demo_editor",
-      name: "Sofie Peeters",
-      email: "sofie@immoreel.be",
-      role: "editor",
-    },
-    {
-      id: "usr_demo_viewer",
-      membershipId: "mem_demo_viewer",
-      name: "Karel Maes",
-      email: "karel@immoreel.be",
-      role: "viewer",
-    },
-  ];
-
-  for (const [index, colleague] of colleagues.entries()) {
-    const joinedAt = new Date(Date.now() - (index + 1) * 86_400_000).toISOString();
-
-    data.users.set(colleague.id, {
-      id: colleague.id,
-      email: colleague.email,
-      name: colleague.name,
-      avatarUrl: null,
-      emailVerifiedAt: joinedAt,
-      passwordHash: null,
-      createdAt: joinedAt,
-      updatedAt: joinedAt,
-    });
-
-    data.memberships.set(colleague.membershipId, {
-      id: colleague.membershipId,
-      userId: colleague.id,
-      organisationId,
-      role: colleague.role,
-      createdAt: joinedAt,
-      updatedAt: joinedAt,
-    });
-  }
+  for (const user of seedUsers()) data.users.set(user.id, user);
+  for (const membership of seedMemberships()) data.memberships.set(membership.id, membership);
 
   return data;
 }
@@ -292,6 +251,41 @@ const memoryStore: AuthStore = {
     user.updatedAt = new Date().toISOString();
   },
 
+  async setUserEmail(userId, email) {
+    const user = getData().users.get(userId);
+    if (!user) return;
+
+    const now = new Date().toISOString();
+    user.email = normaliseEmail(email);
+    // Het nieuwe adres is bevestigd via een link in díé mailbox; het blijft
+    // dus geverifieerd, niet ondanks maar dankzij de wijziging.
+    user.emailVerifiedAt = now;
+    user.updatedAt = now;
+  },
+
+  async deleteAccount(userId) {
+    const data = getData();
+
+    for (const [id, membership] of data.memberships) {
+      if (membership.userId === userId) data.memberships.delete(id);
+    }
+    for (const [id, token] of data.authTokens) {
+      if (token.userId === userId) data.authTokens.delete(id);
+    }
+
+    data.users.delete(userId);
+  },
+
+  async deleteOrganisation(organisationId) {
+    const data = getData();
+
+    for (const [id, membership] of data.memberships) {
+      if (membership.organisationId === organisationId) data.memberships.delete(id);
+    }
+
+    data.organisations.delete(organisationId);
+  },
+
   async markEmailVerified(userId) {
     const user = getData().users.get(userId);
     if (!user || user.emailVerifiedAt) return;
@@ -373,13 +367,28 @@ const memoryStore: AuthStore = {
     getData().memberships.delete(membershipId);
   },
 
-  async createAuthToken({ userId, purpose, tokenHash, expiresAt }) {
+  async listAllUsers() {
+    return [...getData().users.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
+  async listAllOrganisations() {
+    return [...getData().organisations.values()].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    );
+  },
+
+  async listAllMemberships() {
+    return [...getData().memberships.values()];
+  },
+
+  async createAuthToken({ userId, purpose, tokenHash, expiresAt, email }) {
     const now = new Date().toISOString();
     const token: AuthToken = {
       id: `tok_${randomUUID()}`,
       userId,
       purpose,
       tokenHash,
+      email: email ? normaliseEmail(email) : null,
       expiresAt: expiresAt.toISOString(),
       usedAt: null,
       createdAt: now,
@@ -388,6 +397,17 @@ const memoryStore: AuthStore = {
 
     getData().authTokens.set(token.id, token);
     return token;
+  },
+
+  async findOpenAuthToken(userId, purpose) {
+    for (const token of getData().authTokens.values()) {
+      if (token.userId !== userId || token.purpose !== purpose || token.usedAt) continue;
+      if (new Date(token.expiresAt).getTime() < Date.now()) continue;
+
+      return token;
+    }
+
+    return null;
   },
 
   async consumeAuthToken(purpose, tokenHash) {

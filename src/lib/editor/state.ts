@@ -145,7 +145,10 @@ function toSource(asset: UploadAsset, previous?: SceneSource): SceneSource {
     previewUrl: asset.url ?? asset.previewUrl ?? previous?.previewUrl ?? null,
     status: UPLOAD_STATUS[asset.status],
     progress: asset.status === "done" ? 100 : Math.round(asset.progress),
-    error: asset.status === "canceled" ? "Geannuleerd." : asset.error,
+    // De scène houdt alleen de zin bij; de volledige fout (code, retrybeleid)
+    // blijft bij de upload zelf, want daar staat ook de knop om het opnieuw te
+    // proberen.
+    error: asset.status === "canceled" ? "Geannuleerd." : asset.error?.message,
   });
 }
 

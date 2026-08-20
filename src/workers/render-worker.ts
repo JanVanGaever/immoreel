@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { getProjectStore } from "@/db/project-store";
 import { getRenderJobStore } from "@/db/render-job-store";
+import { notifyRenderFinished } from "@/lib/notifications/render";
 import { toRenderJobError } from "@/lib/render/errors";
 import { overallProgress } from "@/lib/render/progress";
 import { describeProgress, projectStatusForJobs, toProjectStatus } from "@/lib/render/status";
@@ -166,8 +167,12 @@ async function processRenderJob(
       sizeInBytes: result.sizeInBytes,
     });
 
-    if (finished) await publish(job, finished, log);
-    else log.warn("Resultaat niet bewaard: de lease was al overgenomen");
+    if (finished) {
+      await publish(job, finished, log);
+      await notifyRenderFinished(finished);
+    } else {
+      log.warn("Resultaat niet bewaard: de lease was al overgenomen");
+    }
 
     log.info("Render klaar", {
       durationMs: Date.now() - startedAt,
@@ -188,7 +193,15 @@ async function processRenderJob(
     const willRetry = failure.retryable && job.attemptsStarted < attempts;
 
     const updated = await store.fail(data.jobId, leaseId, failure, { willRetry });
-    if (updated) await publish(job, updated, log);
+
+    if (updated) {
+      await publish(job, updated, log);
+
+      // Alleen als het hierbij blijft. Een poging die zo nog eens overgedaan
+      // wordt, is geen nieuws voor de gebruiker — die ziet de balk gewoon
+      // opnieuw beginnen.
+      if (!willRetry) await notifyRenderFinished(updated);
+    }
 
     log.error(
       willRetry ? "Render mislukt; er volgt een nieuwe poging" : "Render definitief mislukt",

@@ -67,6 +67,13 @@ export function UploadAssetCard({
   const isBusy = asset.status === "uploading" || asset.status === "queued";
   const hasFailed = asset.status === "error" || asset.status === "canceled";
 
+  /**
+   * De knop verschijnt alleen als opnieuw proberen ook iets kan opleveren. Een
+   * bestand dat te groot is, blijft te groot: daar is "Opnieuw proberen" een
+   * belofte die de knop niet waarmaakt, en dan is verwijderen het echte antwoord.
+   */
+  const mayRetry = asset.status === "canceled" || (asset.error?.retry.mode ?? "manual") !== "none";
+
   return (
     <li
       draggable
@@ -139,7 +146,7 @@ export function UploadAssetCard({
           >
             <ChevronRight />
           </IconButton>
-          {hasFailed ? (
+          {hasFailed && mayRetry ? (
             <IconButton
               label={`${asset.fileName} opnieuw proberen`}
               variant="secondary"
@@ -177,7 +184,9 @@ export function UploadAssetCard({
         </p>
 
         {asset.status === "error" ? (
-          <p className="mt-0.5 text-xs text-danger">{asset.error}</p>
+          <p className="mt-0.5 text-xs text-danger" title={asset.error?.errorId ?? undefined}>
+            {asset.error?.message ?? "De upload is mislukt."}
+          </p>
         ) : isBusy ? (
           <Meter
             className="mt-1.5"
@@ -185,7 +194,14 @@ export function UploadAssetCard({
             value={asset.progress}
             max={100}
             srLabel={`Upload van ${asset.fileName}`}
-            label={<span className="text-xs">{formatBytes(asset.sizeInBytes)}</span>}
+            label={
+              <span className="text-xs">
+                {/* Zolang de hook het zelf opnieuw probeert, hoort dat er te
+                    staan: een balk die terugspringt zonder uitleg leest als een
+                    upload die vastloopt. */}
+                {asset.attempts ? `Poging ${asset.attempts + 1}` : formatBytes(asset.sizeInBytes)}
+              </span>
+            }
             valueLabel={<span className="text-xs">{Math.round(asset.progress)}%</span>}
           />
         ) : (

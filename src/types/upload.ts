@@ -1,4 +1,5 @@
 import type { ID } from "@/types/common";
+import type { AppErrorCode, AppErrorShape } from "@/types/error";
 
 /**
  * De vormen van de uploadflow. Ze staan los van `DraftPhoto` en `VideoProject`:
@@ -26,8 +27,16 @@ export type UploadAsset = {
   status: UploadStatus;
   /** Percentage tussen 0 en 100. */
   progress: number;
-  /** Waarom de upload mislukt is; alleen bij status `error`. */
-  error?: string;
+  /**
+   * Waarom de upload mislukt is; alleen bij status `error`.
+   *
+   * De hele fout en niet enkel de zin, want het scherm moet er meer uit kunnen
+   * halen dan tekst: of opnieuw proberen zin heeft (`retry`), en welke code een
+   * gebruiker doorbelt (`errorId`). Zie `src/lib/errors`.
+   */
+  error?: AppErrorShape;
+  /** Hoeveel pogingen deze foto al gehad heeft; 0 zolang het de eerste is. */
+  attempts?: number;
   /** Wat de backend teruggeeft zodra het bestand binnen is. */
   remoteId?: ID | null;
   /** Definitieve URL in de opslag, zodra de upload klaar is. */
@@ -37,6 +46,8 @@ export type UploadAsset = {
 /** Een bestand dat niet eens in de lijst komt, met de reden erbij. */
 export type UploadRejection = {
   fileName: string;
+  /** Waarom het geweigerd werd: `too-large`, `unsupported-media`, ... */
+  code: AppErrorCode;
   reason: string;
 };
 

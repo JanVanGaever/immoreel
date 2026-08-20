@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { createLogger } from "@/lib/errors/logger";
 import { applyPayment } from "@/lib/billing/service";
 import { MollieError } from "@/lib/mollie/client";
 import { isMollieConfigured } from "@/lib/mollie/config";
+
+const log = createLogger("billing");
 
 /**
  * De webhook van Mollie.
@@ -40,7 +43,7 @@ export async function POST(request: Request) {
     // Zonder sleutel kunnen we de betaling niet ophalen en dus niets
     // vaststellen. Een 500 laat Mollie het later opnieuw proberen — tegen die
     // tijd staat de sleutel er misschien.
-    console.error("[billing] webhook zonder MOLLIE_API_KEY");
+    log.error("webhook binnengekomen zonder MOLLIE_API_KEY");
 
     return NextResponse.json({ error: "Betalingen niet geconfigureerd." }, { status: 500 });
   }
@@ -55,14 +58,14 @@ export async function POST(request: Request) {
 
   try {
     const outcome = await applyPayment(paymentId);
-    console.info(`[billing] ${outcome.reason}`);
+    log.info("webhook verwerkt", { paymentId, reason: outcome.reason });
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (error) {
     if (error instanceof MollieError && isUnresolvable(error)) {
       // Mollie kent deze betaling niet en zal ze ook niet leren kennen. Dit
       // nog twintig keer opnieuw krijgen helpt niemand.
-      console.error(`[billing] webhook ${paymentId} definitief mislukt: ${error.message}`);
+      log.error("webhook definitief mislukt; niet meer herhalen", error, { paymentId });
 
       return NextResponse.json({ received: true }, { status: 200 });
     }
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
     // terugkomen: een verkeerd geconfigureerde sleutel is over een uur
     // misschien rechtgezet, en tot dan is een 200 een betaling die we voorgoed
     // gemist hebben.
-    console.error(`[billing] webhook ${paymentId} mislukt, Mollie mag herhalen`, error);
+    log.error("webhook mislukt; Mollie mag herhalen", error, { paymentId });
 
     return NextResponse.json({ error: "Tijdelijke fout." }, { status: 500 });
   }

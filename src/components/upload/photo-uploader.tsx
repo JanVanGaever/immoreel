@@ -7,6 +7,7 @@ import { UploadZone } from "@/components/upload/upload-zone";
 import { useUploads, type UseUploadsOptions } from "@/components/upload/use-uploads";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ErrorAlert } from "@/components/ui/error-state";
 import { Meter } from "@/components/ui/meter";
 import { formatBytes } from "@/lib/format";
 import { createFakeTransport } from "@/lib/uploads/transport";
@@ -56,6 +57,8 @@ export function PhotoUploader({
   const isEmpty = assets.length === 0;
   const totalBytes = assets.reduce((sum, asset) => sum + asset.sizeInBytes, 0);
   const failedAssets = assets.filter((asset) => asset.status === "error");
+  const firstFailure = failedAssets.find((asset) => asset.error)?.error;
+  const retryableAssets = failedAssets.filter((asset) => asset.error?.retry.mode !== "none");
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
@@ -131,21 +134,21 @@ export function PhotoUploader({
         </Alert>
       ) : null}
 
-      {failedAssets.length > 0 ? (
-        <Alert
-          variant="danger"
-          title={`${failedAssets.length} upload${failedAssets.length === 1 ? "" : "s"} mislukt`}
-        >
-          De foto&apos;s staan nog in de lijst, dus je volgorde blijft staan.
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-2 -ml-3"
-            onClick={() => failedAssets.forEach((asset) => uploads.retry(asset.id))}
-          >
-            Alles opnieuw proberen
-          </Button>
-        </Alert>
+      {/* Eén melding voor alle mislukte uploads samen: de foto's zelf dragen
+          hun eigen fout al, en tien rode kaarten met tien keer dezelfde zin
+          eronder maken het niet duidelijker. Wat hier staat, is de eerste fout
+          uit de lijst — met haar code, zodat support er iets aan heeft. */}
+      {firstFailure ? (
+        <ErrorAlert
+          error={firstFailure}
+          hint={`${failedAssets.length} van de ${assets.length} foto's raakte niet geüpload. Ze staan nog in de lijst, dus je volgorde blijft staan.`}
+          retryLabel={retryableAssets.length === 1 ? "Opnieuw proberen" : "Alles opnieuw proberen"}
+          onRetry={
+            retryableAssets.length > 0
+              ? () => retryableAssets.forEach((asset) => uploads.retry(asset.id))
+              : undefined
+          }
+        />
       ) : null}
     </div>
   );

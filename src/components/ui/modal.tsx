@@ -93,6 +93,14 @@ export function Modal({
       className={cn(
         "m-auto w-[calc(100vw-2rem)] rounded-xl border border-border bg-surface p-0 text-fg shadow-elevated",
         "backdrop:bg-black/40 backdrop:backdrop-blur-[2px]",
+        // Kop en voet houden hun plaats, het middenstuk krimpt. Zonder deze
+        // grens groeit een venster met veel inhoud op een liggende telefoon
+        // voorbij het scherm, en verdwijnen de knoppen onderaan uit beeld.
+        //
+        // `open:flex` en niet `flex`: de browser verbergt een gesloten dialoog
+        // met `display: none`, en een eigen `display` zou daar dwars doorheen
+        // gaan — het venster stond dan altijd open.
+        "max-h-[calc(100svh-2rem)] flex-col overflow-hidden open:flex",
         modalSizes[size],
         className,
       )}
@@ -122,7 +130,10 @@ export function ModalHeader({
 
   return (
     <div
-      className={cn("flex items-start justify-between gap-4 border-b border-border px-5 py-4", className)}
+      className={cn(
+        "flex shrink-0 items-start justify-between gap-4 border-b border-border px-5 py-4",
+        className,
+      )}
       {...props}
     >
       <div className="min-w-0">
@@ -141,14 +152,20 @@ export function ModalHeader({
 }
 
 export function ModalBody({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("max-h-[70svh] overflow-y-auto px-5 py-4", className)} {...props} />;
+  return (
+    <div
+      className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4", className)}
+      {...props}
+    />
+  );
 }
 
 export function ModalFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end",
+        "flex shrink-0 flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end",
+        "pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4",
         className,
       )}
       {...props}

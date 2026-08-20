@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isSeedEnabled, seedProjects } from "@/db/seed";
 import { createAudio } from "@/lib/editor/audio";
 import { createBranding } from "@/lib/editor/branding";
 import type { ProjectPatch } from "@/lib/editor/document";
@@ -28,6 +29,12 @@ export type ProjectStore = {
     projectId: ID,
     patch: ProjectPatch,
   ): Promise<VideoProject | null>;
+  /**
+   * Alle projecten, over alle organisaties heen. Alleen voor het interne
+   * supportpaneel (`src/db/admin-store.ts`); elke andere lezer hoort met een
+   * `organisationId` binnen te komen.
+   */
+  listAllProjects(): Promise<VideoProject[]>;
   /** Zet de status, bijvoorbeeld wanneer een export in de wachtrij gaat. */
   setProjectStatus(
     organisationId: ID,
@@ -41,9 +48,24 @@ declare global {
 }
 
 function getData(): Map<ID, VideoProject> {
-  globalThis.__immoreelProjects ??= new Map();
+  globalThis.__immoreelProjects ??= seed(new Map());
 
   return globalThis.__immoreelProjects;
+}
+
+/**
+ * De drie panden van het demokantoor (`src/db/seed/projects.ts`).
+ *
+ * Ze staan hier en niet alleen op het dashboard, en dat is het hele punt: de
+ * dashboardstore toonde vroeger projecten die in deze map niet bestonden, dus
+ * gaf klikken op "Recente projecten" een 404. Nu is het dezelfde rij.
+ */
+function seed(data: Map<ID, VideoProject>): Map<ID, VideoProject> {
+  if (!isSeedEnabled()) return data;
+
+  for (const project of seedProjects()) data.set(project.id, project);
+
+  return data;
 }
 
 function createProjectId(): ID {
@@ -123,6 +145,10 @@ const memoryStore: ProjectStore = {
     getData().set(projectId, updated);
 
     return updated;
+  },
+
+  async listAllProjects() {
+    return [...getData().values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
 
   async setProjectStatus(organisationId, projectId, status) {

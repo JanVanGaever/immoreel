@@ -9,6 +9,7 @@ import { FontField } from "@/components/brand/font-field";
 import { LogoField } from "@/components/brand/logo-field";
 import { useBrandKitForm } from "@/components/brand/use-brand-kit-form";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -58,7 +59,11 @@ export function BrandKitForm({ kit, canManage }: BrandKitFormProps) {
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <Form onSubmit={handleSubmit} noValidate className="gap-6">
-        {state.status === "fout" ? <Alert variant="danger" title={state.message} /> : null}
+        {/* Het formulier is langer dan het scherm: een fout op een veld dat
+            hieronder ligt, is anders alleen te vinden door te scrollen. */}
+        {state.status === "fout" ? (
+          <ErrorSummary error={state.message} fields={state.fieldErrors} />
+        ) : null}
 
         {state.status === "opgeslagen" ? (
           <Alert variant="success" title="Je huisstijl is opgeslagen.">

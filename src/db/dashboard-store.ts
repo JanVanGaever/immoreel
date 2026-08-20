@@ -1,15 +1,30 @@
-import { PLAN_LIMITS, TRIAL_DAYS, getPlan } from "@/lib/billing";
+import { getAuthStore } from "@/db/auth-store";
+import { getBillingStore } from "@/db/billing-store";
+import { getProjectStore } from "@/db/project-store";
+import { getRenderJobStore } from "@/db/render-job-store";
+import { seedProjectMeta, seedStorageUsedInBytes } from "@/db/seed";
+import { PLAN_LIMITS, getPlan } from "@/lib/billing";
 import { emptyStatusCounts } from "@/lib/project-status";
-import type { DashboardOverview, ID, ProjectSummary, ProjectStatusCounts } from "@/types";
+import type {
+  DashboardOverview,
+  ID,
+  ProjectStatusCounts,
+  ProjectSummary,
+  RenderJob,
+  VideoProject,
+} from "@/types";
 
 /**
  * Alles wat het dashboard leest, achter één poort — net als `AuthStore`.
- * Zolang er geen ORM gekozen is, draait hieronder een mock; de pagina en de
- * componenten merken daar niets van.
  *
- * Een echte databank aansluiten betekent: één nieuwe implementatie van
- * `DashboardStore` schrijven en die teruggeven uit `getDashboardStore()`.
- * De vorm van `DashboardOverview` blijft dan gelijk.
+ * Deze store bezit geen data. Ze telt wat er in de project-, render-, auth- en
+ * facturatiestore staat en legt dat naast elkaar, zoals `AdminStore` dat doet
+ * voor support. Dat was ooit anders: hier stond een lijst met zes verzonnen
+ * panden, en die stonden in geen enkele andere store. Het dashboard toonde dus
+ * projecten die de editor niet kon openen. Wat je hier ziet, bestaat nu ook.
+ *
+ * Een echte databank aansluiten verandert hier niets: de tellingen hieronder
+ * worden dan een paar `count(*)`-query's, en `DashboardOverview` blijft gelijk.
  */
 export type DashboardStore = {
   /** Alles wat het dashboard in één keer nodig heeft, per organisatie. */
@@ -19,25 +34,7 @@ export type DashboardStore = {
 /** Hoeveel projecten de lijst "Recente projecten" toont. */
 export const RECENT_PROJECTS_LIMIT = 6;
 
-/** De organisatie die bij het demoaccount hoort (zie `auth-store.ts`). */
-const DEMO_ORGANISATION_ID = "org_demo";
-
-const hours = (n: number) => n * 3_600_000;
-const days = (n: number) => n * 86_400_000;
-
-function isoFrom(now: number, offsetInMs: number): string {
-  return new Date(now + offsetInMs).toISOString();
-}
-
-/** Eerste en laatste moment van de lopende kalendermaand. */
-function currentPeriod(now: Date): { periodStart: string; periodEnd: string } {
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
-  return { periodStart: start.toISOString(), periodEnd: end.toISOString() };
-}
-
-function countByStatus(projects: ProjectSummary[]): ProjectStatusCounts {
+function countByStatus(projects: VideoProject[]): ProjectStatusCounts {
   return projects.reduce<ProjectStatusCounts>((counts, project) => {
     counts[project.status] += 1;
     return counts;
@@ -45,155 +42,101 @@ function countByStatus(projects: ProjectSummary[]): ProjectStatusCounts {
 }
 
 /**
- * Een organisatie zonder projecten: alle tellers op nul en een lopende
- * proefperiode. Dit is wat een nieuwe gebruiker na de registratie ziet.
+ * Van project naar lijstitem.
+ *
+ * De voortgang en de foutmelding komen uit de renderjobs en niet uit het
+ * project: het project weet dát het rendert, de job weet hoe ver. Zo staat er
+ * op de kaart hetzelfde percentage als op de downloadpagina.
  */
-function emptyOverview(now: Date): DashboardOverview {
-  const plan = getPlan("starter");
-  const limits = PLAN_LIMITS.starter;
-  const trialEndsAt = isoFrom(now.getTime(), days(TRIAL_DAYS));
+function toSummary(project: VideoProject, jobs: RenderJob[]): ProjectSummary {
+  const own = jobs
+    .filter((job) => job.projectId === project.id)
+    .sort((a, b) => b.queuedAt.localeCompare(a.queuedAt));
+
+  const running = own.find((job) => job.status === "processing" || job.status === "finalizing");
+  const failed = own.find((job) => job.status === "failed");
+  const meta = seedProjectMeta(project.id);
 
   return {
-    totalProjects: 0,
-    projectCounts: emptyStatusCounts(),
-    recentProjects: [],
-    usage: {
-      ...currentPeriod(now),
-      rendersUsed: 0,
-      rendersIncluded: plan.includedRendersPerMonth,
-      renderMinutesUsed: 0,
-      storageUsedInBytes: 0,
-      storageIncludedInBytes: limits.storageInBytes,
-      seatsUsed: 1,
-      seatsIncluded: limits.seats,
-    },
-    subscription: {
-      planId: plan.id,
-      status: "proef",
-      currentPeriodEnd: trialEndsAt,
-      cancelAtPeriodEnd: false,
-      trialEndsAt,
-    },
+    id: project.id,
+    title: project.title,
+    status: project.status,
+    aspectRatio: project.aspectRatio,
+    durationInSeconds: project.durationInSeconds,
+    posterUrl: project.posterUrl ?? null,
+    // Referentie en gemeente horen bij het pand, en `Property` heeft nog geen
+    // store (zie `src/types/property.ts`). Tot die er is, komen ze voor de
+    // geseede projecten uit de seed en zijn ze voor de rest leeg — de kaart
+    // laat ze dan gewoon weg.
+    reference: meta?.reference ?? null,
+    city: meta?.city ?? null,
+    updatedAt: project.updatedAt,
+    renderProgress: project.status === "renderen" ? (running?.progress ?? 0) : null,
+    errorMessage: project.status === "mislukt" ? (failed?.error?.message ?? null) : null,
   };
 }
 
-/**
- * Mockdata voor het demokantoor, zodat het dashboard met echte vormen te zien
- * is. Data staat relatief aan "nu", anders veroudert het scherm zichtbaar.
- */
-function demoProjects(now: number): ProjectSummary[] {
-  return [
-    {
-      id: "prj_kortrijk_leiestraat",
-      title: "Leiestraat 44 — herenhuis",
-      status: "renderen",
-      aspectRatio: "16:9",
-      durationInSeconds: 96,
-      reference: "VK-2043",
-      city: "Kortrijk",
-      updatedAt: isoFrom(now, -hours(0.3)),
-      renderProgress: 62,
-    },
-    {
-      id: "prj_gent_zuidpark",
-      title: "Zuidparklaan 8 — nieuwbouwappartement",
-      status: "klaar",
-      aspectRatio: "9:16",
-      durationInSeconds: 42,
-      reference: "VK-2039",
-      city: "Gent",
-      updatedAt: isoFrom(now, -hours(5)),
-    },
-    {
-      id: "prj_brugge_ezelstraat",
-      title: "Ezelstraat 12 — handelspand",
-      status: "mislukt",
-      aspectRatio: "16:9",
-      durationInSeconds: 78,
-      reference: "VH-1188",
-      city: "Brugge",
-      updatedAt: isoFrom(now, -hours(9)),
-      errorMessage: "Een foto kon niet gelezen worden (IMG_2291.heic).",
-    },
-    {
-      id: "prj_hasselt_kempische",
-      title: "Kempische Steenweg 210 — kantoorruimte",
-      status: "wachtrij",
-      aspectRatio: "16:9",
-      durationInSeconds: 64,
-      reference: "VH-1192",
-      city: "Hasselt",
-      updatedAt: isoFrom(now, -days(1)),
-    },
-    {
-      id: "prj_antwerpen_zurenborg",
-      title: "Dageraadplaats 3 — bel-etage",
-      status: "in-bewerking",
-      aspectRatio: "1:1",
-      durationInSeconds: 55,
-      reference: "VK-2051",
-      city: "Antwerpen",
-      updatedAt: isoFrom(now, -days(2)),
-    },
-    {
-      id: "prj_leuven_vaartkom",
-      title: "Vaartkom 61 — loft",
-      status: "concept",
-      aspectRatio: "9:16",
-      durationInSeconds: 0,
-      reference: "VK-2052",
-      city: "Leuven",
-      updatedAt: isoFrom(now, -days(3)),
-    },
-  ];
+/** Renders die binnen de lopende facturatieperiode afgewerkt zijn. */
+function rendersInPeriod(jobs: RenderJob[], periodStart: string, periodEnd: string): RenderJob[] {
+  return jobs.filter((job) => {
+    if (job.status !== "done" || !job.finishedAt) return false;
+
+    return job.finishedAt >= periodStart && job.finishedAt <= periodEnd;
+  });
 }
 
-function demoOverview(now: Date): DashboardOverview {
-  const projects = demoProjects(now.getTime());
-  const plan = getPlan("kantoor");
-  const limits = PLAN_LIMITS.kantoor;
-
-  return {
-    // Hoger dan de lijst: die toont alleen de laatst bewerkte projecten.
-    totalProjects: 34,
-    projectCounts: { ...countByStatus(projects), klaar: 26 },
-    recentProjects: projects.slice(0, RECENT_PROJECTS_LIMIT),
-    usage: {
-      ...currentPeriod(now),
-      rendersUsed: 34,
-      rendersIncluded: plan.includedRendersPerMonth,
-      renderMinutesUsed: 51,
-      storageUsedInBytes: Math.round(18.4 * 1024 ** 3),
-      storageIncludedInBytes: limits.storageInBytes,
-      seatsUsed: 4,
-      seatsIncluded: limits.seats,
-    },
-    subscription: {
-      planId: plan.id,
-      status: "actief",
-      currentPeriodEnd: currentPeriod(now).periodEnd,
-      cancelAtPeriodEnd: false,
-      trialEndsAt: null,
-    },
-  };
-}
-
-const mockStore: DashboardStore = {
+const memoryStore: DashboardStore = {
   async getOverview(organisationId) {
-    const now = new Date();
+    const [projects, jobs, memberships, subscription] = await Promise.all([
+      getProjectStore().listProjects(organisationId),
+      getRenderJobStore().listAll(),
+      getAuthStore().listMemberships(organisationId),
+      // Anders dan het adminpaneel mag het dashboard dit wél: een kantoor
+      // zonder abonnement is een kantoor dat aan zijn proefperiode begint.
+      getBillingStore().getSubscription(organisationId),
+    ]);
 
-    // Alleen het demokantoor heeft data. Een vers aangemaakte organisatie
-    // krijgt de lege staat, precies zoals een echte nieuwe klant.
-    if (organisationId === DEMO_ORGANISATION_ID && process.env.NODE_ENV !== "production") {
-      return demoOverview(now);
-    }
+    const ownJobs = jobs.filter((job) => job.organisationId === organisationId);
+    const plan = getPlan(subscription.planId);
+    const limits = PLAN_LIMITS[subscription.planId];
 
-    return emptyOverview(now);
+    const periodStart = subscription.currentPeriodStart;
+    const periodEnd = subscription.currentPeriodEnd;
+    const rendered = rendersInPeriod(ownJobs, periodStart, periodEnd);
+    const renderSeconds = rendered.reduce((total, job) => total + (job.durationInSeconds ?? 0), 0);
+
+    return {
+      totalProjects: projects.length,
+      projectCounts: countByStatus(projects),
+      // `listProjects` geeft de laatst bewerkte projecten eerst; de lijst neemt
+      // er de bovenste van.
+      recentProjects: projects
+        .slice(0, RECENT_PROJECTS_LIMIT)
+        .map((project) => toSummary(project, ownJobs)),
+      usage: {
+        periodStart,
+        periodEnd,
+        rendersUsed: rendered.length,
+        rendersIncluded: plan.includedRendersPerMonth,
+        renderMinutesUsed: Math.round(renderSeconds / 60),
+        storageUsedInBytes: seedStorageUsedInBytes(organisationId),
+        storageIncludedInBytes: limits.storageInBytes,
+        seatsUsed: memberships.length,
+        seatsIncluded: limits.seats,
+      },
+      subscription: {
+        planId: subscription.planId,
+        status: subscription.status,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        trialEndsAt: subscription.trialEndsAt ?? null,
+      },
+    };
   },
 };
 
 export function getDashboardStore(): DashboardStore {
   // TODO: zodra de ORM gekozen is, hier de databank-implementatie teruggeven
   // (zie `isDatabaseConfigured()` in `src/db/client.ts`).
-  return mockStore;
+  return memoryStore;
 }

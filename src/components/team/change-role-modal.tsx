@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { ShieldCheck } from "lucide-react";
 import { RolePicker } from "@/components/team/role-picker";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { ROLE_LABELS, ROLES } from "@/lib/auth/roles";
@@ -78,7 +79,7 @@ export function ChangeRoleModal({
       />
 
       <ModalBody className="space-y-4">
-        {error ? <Alert variant="danger" title={error} /> : null}
+        {error ? <ErrorSummary error={error} /> : null}
 
         <RolePicker
           name="member-role"

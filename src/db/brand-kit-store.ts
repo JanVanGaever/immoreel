@@ -1,3 +1,4 @@
+import { SEED_ORGANISATION_ID, isSeedEnabled, seedBrandKit } from "@/db/seed";
 import { createBrandKit } from "@/lib/brand/kit";
 import { sanitizeBrandKit } from "@/lib/brand/validation";
 import type { BrandKit, BrandKitInput, ID } from "@/types";
@@ -32,32 +33,18 @@ function getData(): Map<ID, BrandKit> {
   return globalThis.__immoreelBrandKits;
 }
 
-/** De organisatie die bij het demoaccount hoort (zie `auth-store.ts`). */
-const DEMO_ORGANISATION_ID = "org_demo";
-
 /**
- * Het demokantoor heeft een ingevulde huisstijl, zodat de eindkaart in de
- * preview meteen ergens op slaat. Een nieuwe organisatie begint bij de
- * standaardkit met een leeg contactblok — precies wat de instellingenpagina
- * dan ook laat zien.
+ * Het demokantoor heeft een ingevulde huisstijl (zie `src/db/seed/brand.ts`),
+ * zodat de eindkaart in de preview meteen ergens op slaat. Een nieuwe
+ * organisatie begint bij de standaardkit met een leeg contactblok — precies wat
+ * de instellingenpagina dan ook laat zien.
  */
 function seed(organisationId: ID): BrandKit {
-  if (organisationId !== DEMO_ORGANISATION_ID) return createBrandKit(organisationId);
+  if (!isSeedEnabled() || organisationId !== SEED_ORGANISATION_ID) {
+    return createBrandKit(organisationId);
+  }
 
-  return createBrandKit(organisationId, {
-    primaryColor: "#0f5f57",
-    secondaryColor: "#e7c98a",
-    outroText: "Benieuwd naar dit pand?",
-    ctaText: "Plan je bezoek",
-    contact: {
-      agentName: "Vastgoedkantoor Janssens",
-      phone: "+32 3 234 56 78",
-      email: "info@janssens.be",
-      website: "www.janssens.be",
-    },
-    fontId: "inter",
-    watermarkByDefault: true,
-  });
+  return seedBrandKit();
 }
 
 const memoryStore: BrandKitStore = {

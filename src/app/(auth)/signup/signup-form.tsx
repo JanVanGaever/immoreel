@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { PasswordInput } from "@/components/auth/password-input";
-import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldError, FormField } from "@/components/ui/field";
@@ -17,7 +17,7 @@ export function SignupForm() {
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
       {state.status === "error" && state.message ? (
-        <Alert variant="danger" title={state.message} />
+        <ErrorSummary error={state.message} />
       ) : null}
 
       <FormField label="Je naam" error={state.fieldErrors?.name} required>

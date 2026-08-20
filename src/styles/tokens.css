@@ -96,3 +96,18 @@
   --immo-shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.24);
   --immo-shadow-elevated: 0 2px 4px -2px rgb(0 0 0 / 0.3), 0 12px 24px -8px rgb(0 0 0 / 0.5);
 }
+
+/* -------------------------------------------------------------------------
+ * Aanraakbediening
+ * Een muisaanwijzer is een pixel, een vinger niet. Op een aanraakscherm gaat
+ * de hele controleschaal omhoog naar wat je met een duim raakt (44px), zonder
+ * dat één component daar iets van hoeft te weten: knop, invoerveld, select en
+ * icoonknop hangen allemaal aan deze drie waarden.
+ * ---------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  :root {
+    --control-sm: 2.25rem;
+    --control-md: 2.75rem;
+    --control-lg: 3rem;
+  }
+}

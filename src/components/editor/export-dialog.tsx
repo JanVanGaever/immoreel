@@ -9,6 +9,7 @@ import {
 } from "@/components/editor/panels/export-selector";
 import type { EditorController } from "@/components/editor/use-editor";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { exportProjectAction } from "@/lib/editor/actions";
@@ -75,7 +76,7 @@ export function ExportDialog({
           </Alert>
         ) : null}
 
-        {state.status === "fout" ? <Alert variant="danger" title={state.message} /> : null}
+        {state.status === "fout" ? <ErrorSummary error={state.message} /> : null}
 
         <ExportPresetList editor={editor} />
 

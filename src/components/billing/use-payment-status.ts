@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createLogger } from "@/lib/errors/logger";
+import { toAppError } from "@/lib/errors/normalize";
+import { requestJson } from "@/lib/errors/request";
 import { API_ROUTES } from "@/lib/constants";
+import type { AppErrorShape } from "@/types/error";
 import type {
   CheckoutAttemptStatus,
   PaymentMethodId,
@@ -43,7 +47,13 @@ export type PaymentStatusState = {
   isPolling: boolean;
   /** Twee minuten voorbij zonder uitkomst. */
   hasTimedOut: boolean;
-  error: string | null;
+  /**
+   * De laatste fout, of `null`. De hele fout en niet enkel de zin: het scherm
+   * moet het verschil kunnen zien tussen "we vinden deze betaling niet"
+   * (`payment-not-found`, en dan is doorzoeken zinloos) en "de server
+   * antwoordde niet" (`network`, en dan komt het zo misschien wel goed).
+   */
+  error: AppErrorShape | null;
   /** Opnieuw beginnen met kijken, bijvoorbeeld op een knop. */
   check: () => void;
 };
@@ -52,27 +62,21 @@ export type PaymentStatusState = {
 const INTERVALS = [1_000, 1_500, 2_000, 3_000, 4_000, 5_000, 8_000];
 const TIMEOUT_MS = 120_000;
 
+const log = createLogger("billing");
+
 export function usePaymentStatus(paymentId: string): PaymentStatusState {
   const [payment, setPayment] = useState<PaymentStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppErrorShape | null>(null);
   const [hasTimedOut, setTimedOut] = useState(false);
+  /** De lus is gestopt op een fout waar wachten niets aan verandert. */
+  const [stopped, setStopped] = useState(false);
   /** Verhogen begint een nieuwe ronde; zo is `check()` niet meer dan dat. */
   const [round, setRound] = useState(0);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async (): Promise<CheckoutAttemptStatus> => {
-    const response = await fetch(API_ROUTES.paymentStatus(paymentId), { cache: "no-store" });
-
-    if (!response.ok) {
-      throw new Error(
-        response.status === 404
-          ? "We vinden deze betaling niet terug."
-          : "De status kon niet opgehaald worden.",
-      );
-    }
-
-    const data = (await response.json()) as PaymentStatus;
+    const data = await requestJson<PaymentStatus>(API_ROUTES.paymentStatus(paymentId));
 
     setPayment(data);
     setError(null);
@@ -95,8 +99,23 @@ export function usePaymentStatus(paymentId: string): PaymentStatusState {
       } catch (cause) {
         if (cancelled) return;
 
-        // Eén mislukte poging stopt de lus niet: de volgende kan wel slagen.
-        setError(cause instanceof Error ? cause.message : "De status kon niet opgehaald worden.");
+        const failure = toAppError(cause, { context: { paymentId } });
+
+        log.warn("betaalstatus ophalen mislukt", {
+          paymentId,
+          errorCode: failure.code,
+          errorId: failure.errorId,
+        });
+
+        setError(failure.toShape());
+
+        // Een fout die niet vanzelf overgaat, stopt de lus: een betaling die
+        // niet bestaat, bestaat over acht seconden nog altijd niet. Bij een
+        // hapering gaat het pollen wél door — de volgende poging kan slagen.
+        if (!failure.isAutoRetryable) {
+          setStopped(true);
+          return;
+        }
       }
 
       if (Date.now() - startedAt > TIMEOUT_MS) {
@@ -115,16 +134,17 @@ export function usePaymentStatus(paymentId: string): PaymentStatusState {
       cancelled = true;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [load, round]);
+  }, [load, paymentId, round]);
 
   const check = useCallback(() => {
     setTimedOut(false);
+    setStopped(false);
     setRound((current) => current + 1);
   }, []);
 
   return {
     payment,
-    isPolling: !hasTimedOut && (payment?.status ?? "open") === "open",
+    isPolling: !hasTimedOut && !stopped && (payment?.status ?? "open") === "open",
     hasTimedOut,
     error,
     check,

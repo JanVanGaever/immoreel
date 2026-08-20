@@ -68,7 +68,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="space-y-0.5 border-t border-border px-3 py-4">
+      {/* De onderrand van een telefoonscherm is niet de onderrand van het
+          beeld: daar staat de streep voor het thuisgebaar overheen. */}
+      <div className="space-y-0.5 border-t border-border px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {secondaryNavigation.map((item) => (
           <NavLink key={item.href} item={item} active={false} onNavigate={onNavigate} />
         ))}
@@ -85,13 +87,18 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <SidebarContent />
       </aside>
 
-      {/* Mobiel: uitschuifbaar paneel */}
+      {/* Mobiel: uitschuifbaar paneel.
+          `inert` en niet `aria-hidden`: het paneel staat dicht nog altijd in
+          de pagina, links buiten beeld. Met alleen `aria-hidden` blijven die
+          links met de tabtoets bereikbaar — de focus verdwijnt dan naar iets
+          wat niemand ziet staan. `inert` haalt ze uit de tabvolgorde én uit de
+          toegankelijkheidsboom. */}
       <div
         className={cn(
           "fixed inset-0 z-50 lg:hidden",
           open ? "pointer-events-auto" : "pointer-events-none",
         )}
-        aria-hidden={!open}
+        inert={!open}
       >
         <div
           onClick={onClose}

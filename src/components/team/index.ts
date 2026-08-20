@@ -1,6 +1,5 @@
 export { ChangeRoleModal } from "@/components/team/change-role-modal";
 export { InvitationList } from "@/components/team/invitation-list";
-export { InviteLink } from "@/components/team/invite-link";
 export { InviteMemberModal } from "@/components/team/invite-member-modal";
 export { MemberList } from "@/components/team/member-list";
 export { RemoveMemberModal } from "@/components/team/remove-member-modal";
@@ -10,7 +9,6 @@ export { TeamPanel } from "@/components/team/team-panel";
 
 export type { ChangeRoleModalProps } from "@/components/team/change-role-modal";
 export type { InvitationListProps } from "@/components/team/invitation-list";
-export type { InviteLinkProps } from "@/components/team/invite-link";
 export type { InviteMemberModalProps } from "@/components/team/invite-member-modal";
 export type { MemberListProps } from "@/components/team/member-list";
 export type { RemoveMemberModalProps } from "@/components/team/remove-member-modal";

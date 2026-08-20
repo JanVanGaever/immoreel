@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Info, UserPlus } from "lucide-react";
 import { ChangeRoleModal } from "@/components/team/change-role-modal";
 import { InvitationList } from "@/components/team/invitation-list";
-import { InviteLink } from "@/components/team/invite-link";
+import { CopyLink } from "@/components/ui/copy-link";
 import { InviteMemberModal } from "@/components/team/invite-member-modal";
 import { MemberList } from "@/components/team/member-list";
 import { RemoveMemberModal } from "@/components/team/remove-member-modal";
@@ -79,7 +79,7 @@ export function TeamPanel({
           title={feedback.message}
           className="mb-6"
         >
-          {feedback.inviteUrl ? <InviteLink url={feedback.inviteUrl} className="mt-2" /> : null}
+          {feedback.inviteUrl ? <CopyLink url={feedback.inviteUrl} className="mt-2" /> : null}
         </Alert>
       ) : null}
 

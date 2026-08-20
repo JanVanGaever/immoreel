@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Mail } from "lucide-react";
 import { PasswordInput } from "@/components/auth/password-input";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,7 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
           {redirectTo ? <input type="hidden" name="redirectTo" value={redirectTo} /> : null}
 
           {state.status === "error" && state.message ? (
-            <Alert variant="danger" title={state.message} />
+            <ErrorSummary error={state.message} />
           ) : null}
 
           <FormField label="E-mailadres" error={state.fieldErrors?.email} required>
@@ -78,7 +79,7 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
       <TabsContent value="magic-link">
         <form action={magicAction} className="flex flex-col gap-4" noValidate>
           {magicState.status === "error" && magicState.message ? (
-            <Alert variant="danger" title={magicState.message} />
+            <ErrorSummary error={magicState.message} />
           ) : null}
 
           {magicState.status === "success" ? (

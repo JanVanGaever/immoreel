@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Lock, ShieldCheck } from "lucide-react";
 import { PaymentMethodPicker } from "@/components/billing/payment-method-picker";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { initialBillingState, type BillingActionState } from "@/lib/billing/action-state";
@@ -76,7 +77,7 @@ export function CheckoutForm({ plan, subscription, isTestMode, isConfigured }: C
           </Alert>
         ) : null}
 
-        {state.status === "fout" ? <Alert variant="danger" title={state.message} /> : null}
+        {state.status === "fout" ? <ErrorSummary error={state.message} /> : null}
 
         <Card>
           <CardHeader>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CreditCard, RotateCcw } from "lucide-react";
 import { Price } from "@/components/billing/price";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,7 +75,7 @@ export function SubscriptionPanel({
         <Alert variant="success" title={state.message} className="mb-4" />
       ) : null}
       {state.status === "fout" ? (
-        <Alert variant="danger" title={state.message} className="mb-4" />
+        <ErrorSummary error={state.message} className="mb-4" />
       ) : null}
 
       <Card className="mb-8">

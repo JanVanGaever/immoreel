@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { PasswordInput } from "@/components/auth/password-input";
-import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
 import { initialAuthState } from "@/lib/auth/action-state";
@@ -17,7 +17,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       <input type="hidden" name="token" value={token} />
 
       {state.status === "error" && state.message ? (
-        <Alert variant="danger" title={state.message} />
+        <ErrorSummary error={state.message} />
       ) : null}
 
       <FormField

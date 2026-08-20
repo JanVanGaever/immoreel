@@ -1,0 +1,598 @@
+// Immoreel — databaseschema.
+//
+// Eén afspraak over taal, dezelfde als in `src/types`: modelnamen en
+// technische statussen zijn Engels, domeinstatussen die de gebruiker leest
+// blijven Nederlands. Waar een enumwaarde een koppelteken heeft, staat de
+// Prisma-naam in camelCase en houdt `@map` de waarde in de databank gelijk aan
+// de TypeScript-union — zo hoeft er in `src/types` niets te veranderen.
+//
+// Alles hangt onder een organisatie (een makelaarskantoor). Er is bewust geen
+// enkele rij die aan een gebruiker hangt zonder ook een organisatie te kennen:
+// dat is wat autorisatie op één plek houdbaar maakt.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Rollen binnen één organisatie, van veel naar weinig rechten.
+/// `owner` gaat automatisch naar wie de organisatie aanmaakt.
+enum Role {
+  owner
+  editor
+  viewer
+}
+
+/// Belgisch: Nederlands en Frans, met Engels voor internationale collega's.
+enum Locale {
+  nlBE @map("nl-BE")
+  frBE @map("fr-BE")
+  en
+}
+
+/// Eenmalige tokens uit een e-mail.
+enum AuthTokenPurpose {
+  passwordReset @map("password-reset")
+  magicLink     @map("magic-link")
+  emailChange   @map("email-change")
+}
+
+enum AssetKind {
+  image
+  video
+  audio
+  document
+}
+
+enum AspectRatio {
+  landscape @map("16:9")
+  portrait  @map("9:16")
+  square    @map("1:1")
+  vertical  @map("4:5")
+}
+
+enum ProjectStatus {
+  concept
+  inBewerking @map("in-bewerking")
+  wachtrij
+  renderen
+  klaar
+  mislukt
+}
+
+/// De levensloop van een renderjob. `finalizing` is bewust een eigen status:
+/// het beeld is klaar en alleen het uploaden loopt nog.
+enum RenderJobStatus {
+  queued
+  processing
+  finalizing
+  failed
+  done
+}
+
+/// De stappen van de renderpijplijn, in volgorde.
+enum RenderStage {
+  prepare
+  fetch
+  scenes
+  stitch
+  publish
+}
+
+enum RenderErrorCode {
+  projectMissing @map("project-missing")
+  presetMissing  @map("preset-missing")
+  assetsMissing  @map("assets-missing")
+  assetDownload  @map("asset-download")
+  ffmpeg
+  storage
+  timeout
+  cancelled
+  unknown
+}
+
+enum BrandFont {
+  inter
+  dmSans           @map("dm-sans")
+  spaceGrotesk     @map("space-grotesk")
+  sourceSerif      @map("source-serif")
+  libreBaskerville @map("libre-baskerville")
+}
+
+enum PlanId {
+  starter
+  kantoor
+  groep
+}
+
+/// De toestand van een abonnement zoals de app hem kent — niet de status van
+/// Mollie, maar wat die betekent voor het kantoor.
+enum SubscriptionStatus {
+  proef
+  wachtend
+  actief
+  achterstallig
+  opgezegd
+}
+
+enum PaymentMethod {
+  bancontact
+  creditcard
+}
+
+/// Waar een betaling voor diende; bepaalt wat de webhook erna moet doen.
+enum PaymentPurpose {
+  start
+  upgrade
+  verlenging
+  herkansing
+}
+
+/// `open` dekt ook de afrekening die nog bij Mollie op het scherm staat.
+enum PaymentEventStatus {
+  open
+  betaald
+  mislukt
+  terugbetaald
+}
+
+// ---------------------------------------------------------------------------
+// Gebruikers, kantoren en toegang
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String    @id @default(cuid())
+  /// Genormaliseerd naar kleine letters vóór het schrijven; de unieke index
+  /// is hoofdlettergevoelig.
+  email           String    @unique
+  name            String
+  avatarUrl       String?
+  /// `null` bij een account dat alleen via magic link binnenkomt.
+  passwordHash    String?
+  emailVerifiedAt DateTime? @db.Timestamptz(3)
+
+  // Persoonlijke voorkeuren staan hier en niet in een eigen tabel: het is één
+  // rij per gebruiker die altijd samen met de gebruiker gelezen wordt.
+  locale                Locale  @default(nlBE)
+  notifyRenderKlaar     Boolean @default(true)
+  notifyRenderMislukt   Boolean @default(true)
+  notifyTeamWijzigingen Boolean @default(true)
+  notifyFacturatie      Boolean @default(true)
+  notifyProductnieuws   Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  memberships     Membership[]
+  sessions        Session[]
+  authTokens      AuthToken[]
+  uploadedAssets  ProjectAsset[]
+  createdProjects Project[]
+  requestedJobs   RenderJob[]
+  sentInvites     TeamInvite[]
+
+  @@map("users")
+}
+
+/// Een makelaarskantoor of vastgoedgroep.
+model Organization {
+  id        String  @id @default(cuid())
+  name      String
+  slug      String  @unique
+  vatNumber String?
+  logoUrl   String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  memberships   Membership[]
+  sessions      Session[]
+  projects      Project[]
+  assets        ProjectAsset[]
+  renderJobs    RenderJob[]
+  brandKit      BrandKit?
+  subscription  Subscription?
+  paymentEvents PaymentEvent[]
+  invites       TeamInvite[]
+
+  @@map("organizations")
+}
+
+/// Het lidmaatschap koppelt gebruiker en kantoor én draagt de rol. Vandaag
+/// heeft een gebruiker er één (zie `lib/auth/session.ts`); het model laat er
+/// meer toe, zodat een makelaar in twee kantoren later geen migratie is.
+model Membership {
+  id             String @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role   @default(viewer)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, role])
+  @@map("memberships")
+}
+
+/// Eén aangemelde browser.
+///
+/// Het cookie draagt een ondertekende `sid`; deze rij is wat die `sid`
+/// betekent. Ze staat er om te kunnen intrekken — uitloggen op één toestel,
+/// alle sessies beëindigen na een wachtwoordwijziging — wat met een puur
+/// staatloos cookie niet kan.
+model Session {
+  id             String  @id
+  userId         String
+  /// Het kantoor waarin deze sessie werkt. `null` zolang de gebruiker nog
+  /// geen lidmaatschap heeft (of het lidmaatschap intussen weg is).
+  organizationId String?
+  userAgent      String?
+  ipAddress      String?
+
+  expiresAt  DateTime  @db.Timestamptz(3)
+  lastSeenAt DateTime  @default(now()) @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Eenmalige tokens uit een e-mail: wachtwoordherstel, magic link, e-mail
+/// wijzigen. Alleen de SHA-256 staat opgeslagen; de klare tekst zit in de link.
+model AuthToken {
+  id        String           @id @default(cuid())
+  userId    String
+  purpose   AuthTokenPurpose
+  tokenHash String           @unique
+  /// Het nieuwe adres bij `emailChange`. Het staat hier en niet al op de
+  /// gebruiker: pas wie op de link in díé mailbox klikt, bewijst het adres.
+  email     String?
+  expiresAt DateTime         @db.Timestamptz(3)
+  usedAt    DateTime?        @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("auth_tokens")
+}
+
+/// Een uitnodiging per e-mail. Van dezelfde soort als `AuthToken`.
+/// `openstaand` en `verlopen` worden afgeleid uit `expiresAt`, `acceptedAt` en
+/// `revokedAt`: geen taak die rijen moet bijwerken.
+model TeamInvite {
+  id              String    @id @default(cuid())
+  organizationId  String
+  email           String
+  /// De rol die het lidmaatschap krijgt zodra de uitnodiging aanvaard wordt.
+  role            Role      @default(viewer)
+  invitedByUserId String?
+  tokenHash       String    @unique
+  expiresAt       DateTime  @db.Timestamptz(3)
+  acceptedAt      DateTime? @db.Timestamptz(3)
+  revokedAt       DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation(fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, email])
+  @@index([email])
+  @@map("team_invites")
+}
+
+// ---------------------------------------------------------------------------
+// Huisstijl
+// ---------------------------------------------------------------------------
+
+/// De huisstijl van een kantoor: het niveau boven `Project.branding`.
+/// Eén kit per organisatie — een kantoor met twee merken komt later, en dan
+/// vervalt hier alleen de unieke index.
+model BrandKit {
+  id             String @id @default(cuid())
+  organizationId String @unique
+
+  /// URL in de opslag; `null` zolang er geen logo geüpload is.
+  logoUrl            String?
+  logoFileName       String?
+  /// Hex met hekje.
+  primaryColor       String    @default("#0F172A")
+  secondaryColor     String    @default("#2563EB")
+  outroText          String    @default("Benieuwd naar dit pand?")
+  ctaText            String    @default("Bel voor een bezichtiging")
+  fontId             BrandFont @default(inter)
+  /// Of het logo standaard over elke video ligt. Per project te overrulen.
+  watermarkByDefault Boolean   @default(true)
+
+  // Contact voor de eindkaart. Platte kolommen en geen JSON: dit zijn vier
+  // vaste velden die ook buiten de render gelezen worden.
+  contactAgentName String @default("")
+  contactPhone     String @default("")
+  contactEmail     String @default("")
+  contactWebsite   String @default("")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("brand_kits")
+}
+
+// ---------------------------------------------------------------------------
+// Projecten, media en renders
+// ---------------------------------------------------------------------------
+
+/// Eén pandvideo in de editor.
+///
+/// `scenes`, `branding` en `audio` staan als JSON en niet in eigen tabellen.
+/// De editor werkt met één document dat in zijn geheel gelezen, gewijzigd en
+/// automatisch bewaard wordt, en de renderworker leest datzelfde document in
+/// één keer. Scènes uitsplitsen zou van elke autosave een reeks inserts en
+/// deletes maken zonder dat er ooit een query per scène gedraaid wordt.
+model Project {
+  id              String        @id @default(cuid())
+  organizationId  String
+  createdByUserId String?
+  title           String
+  status          ProjectStatus @default(concept)
+  aspectRatio     AspectRatio   @default(landscape)
+  /// Verwijst naar de templatecatalogus in code (`lib/editor/templates.ts`).
+  templateId      String?
+
+  /// `Scene[]` uit `src/types/video.ts`, in tijdlijnvolgorde.
+  scenes   Json @default("[]")
+  /// `BrandingSettings`: alleen wat dit project afwijkt van de BrandKit.
+  /// `null` in een veld betekent "volg de kit" (zie `lib/brand/kit.ts`).
+  branding Json @default("{}")
+  /// `AudioSettings`: volume, fades, ducking.
+  audio    Json @default("{}")
+
+  /// Gekozen exportpresets; id's uit de catalogus in `lib/editor/export-presets`.
+  exportPresetIds String[] @default([])
+
+  musicAssetId      String?
+  voiceoverAssetId  String?
+  posterUrl         String?
+  /// Som van de scèneduur, in seconden; mag fractioneel zijn.
+  durationInSeconds Float   @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?          @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  /// De foto's van dit project. Muziek en voice-over hangen er via een eigen
+  /// relatie aan, zodat een verwijderd geluidsbestand het project niet laat
+  /// wijzen naar een asset die niet meer bestaat.
+  assets       ProjectAsset[] @relation("ProjectAssets")
+  music        ProjectAsset?  @relation("ProjectMusic", fields: [musicAssetId], references: [id], onDelete: SetNull)
+  voiceover    ProjectAsset?  @relation("ProjectVoiceover", fields: [voiceoverAssetId], references: [id], onDelete: SetNull)
+  renderJobs   RenderJob[]
+
+  @@index([organizationId, updatedAt(sort: Desc)])
+  @@index([organizationId, status])
+  @@map("projects")
+}
+
+/// Een bestand in de opslag dat bij één project hoort.
+///
+/// `position` is de volgorde waarin de foto's geüpload of gesorteerd zijn en
+/// daarmee de bron van de beginvolgorde van de scènes. Ze staat bewust niet
+/// onder een unieke index: bij het herschikken worden alle rijen in één keer
+/// hernummerd, en een unieke constraint zou daar halverwege op afketsen.
+model ProjectAsset {
+  id                String    @id @default(cuid())
+  organizationId    String
+  projectId         String
+  uploadedByUserId  String?
+  kind              AssetKind @default(image)
+  fileName          String
+  mimeType          String
+  sizeInBytes       Int
+  width             Int?
+  height            Int?
+  durationInSeconds Float?
+  /// Sleutel in de objectopslag. Uniek, zodat twee rijen nooit hetzelfde
+  /// bestand claimen en het opruimen na een verwijderd project eenduidig is.
+  storageKey        String    @unique
+  thumbnailUrl      String?
+  position          Int       @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation("ProjectAssets", fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy   User?        @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  musicForProjects     Project[] @relation("ProjectMusic")
+  voiceoverForProjects Project[] @relation("ProjectVoiceover")
+
+  @@index([projectId, position])
+  @@index([organizationId, kind])
+  @@map("project_assets")
+}
+
+/// Eén render van één project naar één exportpreset.
+///
+/// De `id` heeft geen `@default`: hij wordt afgeleid uit project, preset en
+/// `fingerprint` (`lib/render/fingerprint.ts`). Dezelfde opdracht geeft
+/// dezelfde id, en de primaire sleutel is daarmee wat het geheel idempotent
+/// maakt — van de knop in de editor tot de rij hier.
+model RenderJob {
+  id                String  @id
+  organizationId    String
+  projectId         String
+  /// Preset-id uit de catalogus in code, niet uit een tabel.
+  presetId          String
+  requestedByUserId String?
+  /// Vingerafdruk van het renderplan; zelfde plan = zelfde job.
+  fingerprint       String
+
+  status   RenderJobStatus @default(queued)
+  stage    RenderStage?
+  /// 0 tot 100. Loopt nooit terug, ook niet na een nieuwe poging.
+  progress Int             @default(0)
+  /// Hoeveel keer een worker eraan begonnen is.
+  attempt  Int             @default(0)
+  /// Welke worker de job nu vasthoudt. Alleen die mag nog schrijven; een
+  /// oudere poging die alsnog terugkomt, wordt genegeerd.
+  leaseId  String?
+
+  /// Vaste sleutel in de opslag, zodat een nieuwe poging overschrijft.
+  outputKey         String?
+  outputUrl         String?
+  posterUrl         String?
+  durationInSeconds Float?
+  sizeInBytes       Int?
+
+  // De fout als kolommen en niet als JSON: het adminpaneel filtert erop.
+  errorCode      RenderErrorCode?
+  /// Wat de gebruiker leest. Nederlands, zonder stacktrace.
+  errorMessage   String?
+  /// Wat in de logs hoort: de oorspronkelijke foutmelding.
+  errorDetail    String?
+  errorStage     RenderStage?
+  errorRetryable Boolean?
+  erroredAt      DateTime?        @db.Timestamptz(3)
+
+  queuedAt   DateTime  @default(now()) @db.Timestamptz(3)
+  startedAt  DateTime? @db.Timestamptz(3)
+  finishedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requestedBy  User?        @relation(fields: [requestedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([status, queuedAt])
+  @@map("render_jobs")
+}
+
+// ---------------------------------------------------------------------------
+// Facturatie
+// ---------------------------------------------------------------------------
+
+/// Het abonnement van een kantoor. Eén per organisatie.
+model Subscription {
+  id             String             @id @default(cuid())
+  organizationId String             @unique
+  planId         PlanId
+  status         SubscriptionStatus @default(proef)
+
+  /// Begin van de lopende periode; nodig om een upgrade pro rata te rekenen.
+  currentPeriodStart DateTime       @db.Timestamptz(3)
+  /// Einde van de lopende periode, en het moment van de volgende incasso.
+  currentPeriodEnd   DateTime       @db.Timestamptz(3)
+  cancelAtPeriodEnd  Boolean        @default(false)
+  /// Alleen bij status `proef`.
+  trialEndsAt        DateTime?      @db.Timestamptz(3)
+  /// Een gekozen kleiner plan dat pas ingaat als de betaalde periode om is.
+  pendingPlanId      PlanId?
+  /// Met welke methode het mandaat is afgegeven.
+  paymentMethod      PaymentMethod?
+
+  /// De klant bij Mollie. Blijft bestaan, ook na opzeggen.
+  mollieCustomerId     String? @unique
+  /// Het lopende abonnement bij Mollie; `null` zodra het opgezegd is.
+  mollieSubscriptionId String? @unique
+  /// Het mandaat waarop geïnd wordt.
+  mollieMandateId      String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paymentEvents PaymentEvent[]
+
+  @@index([status, currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+/// Eén betaling in haar hele verloop: van de afrekening die nog openstaat tot
+/// de factuurregel die eruit volgt.
+///
+/// Bewust één tabel en geen aparte `checkout_attempts` en `invoices`. Het is
+/// dezelfde betaling in twee toestanden, en Mollie levert er één `paymentId`
+/// bij die beide kanten nodig hebben. Met twee tabellen moet elke webhook
+/// eerst uitzoeken waar hij hoort; met deze is de betaling opzoekbaar met de
+/// sleutel die binnenkomt, of de terugkeerpagina nu eerst is of de webhook.
+/// Mislukte betalingen blijven staan: dat is de belangrijkste regel van het
+/// overzicht.
+model PaymentEvent {
+  id             String  @id @default(cuid())
+  organizationId String
+  subscriptionId String?
+
+  /// De betaling bij Mollie; ook de sleutel waarmee de webhook deze rij vindt.
+  molliePaymentId String  @unique
+  /// Doorlopend factuurnummer per organisatie: `2026-0007`. `null` zolang de
+  /// betaling niet geslaagd is — een mislukte poging krijgt geen nummer.
+  number          String?
+
+  status      PaymentEventStatus @default(open)
+  purpose     PaymentPurpose
+  planId      PlanId
+  description String
+
+  /// Exclusief btw.
+  subtotalInCents Int
+  vatInCents      Int
+  /// Wat er effectief geïnd is of wordt.
+  amountInCents   Int
+  currency        String         @default("EUR")
+  method          PaymentMethod?
+
+  /// De periode die met deze betaling gedekt is.
+  periodStart DateTime? @db.Timestamptz(3)
+  periodEnd   DateTime? @db.Timestamptz(3)
+  paidAt      DateTime? @db.Timestamptz(3)
+
+  /// Waar de klant het betaalscherm vindt; alleen zinvol zolang `status` open is.
+  checkoutUrl   String?
+  /// Alleen bij `mislukt`: wat Mollie erover zegt, in leesbare vorm.
+  failureReason String?
+  pdfUrl        String?
+  /// De laatste webhookbody, ongewijzigd. Om achteraf te kunnen nakijken wat
+  /// Mollie precies stuurde toen er iets misging.
+  payload       Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, number])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("payment_events")
+}

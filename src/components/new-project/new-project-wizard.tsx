@@ -11,6 +11,7 @@ import { StepReview } from "@/components/new-project/steps/step-review";
 import { StepTemplate } from "@/components/new-project/steps/step-template";
 import { useProjectDraft } from "@/components/new-project/use-project-draft";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Meter } from "@/components/ui/meter";
@@ -44,6 +45,15 @@ const FIELD_STEPS: Record<DraftField, WizardStepId> = {
   aspectRatio: "formaat",
   templateId: "template",
   photos: "fotos",
+};
+
+/** Hoe een veld heet in de foutsamenvatting; `templateId` zegt de makelaar niets. */
+const DRAFT_FIELD_LABELS: Record<DraftField, string> = {
+  title: "Naam",
+  goal: "Doel",
+  aspectRatio: "Formaat",
+  templateId: "Sjabloon",
+  photos: "Foto's",
 };
 
 const indicatorSteps = WIZARD_STEPS.map(({ id, label }) => ({ id, label }));
@@ -220,8 +230,17 @@ export function NewProjectWizard({ templates }: NewProjectWizardProps) {
             </h2>
             <p className="mt-1 text-sm text-fg-muted">{step.intro}</p>
 
+            {/* De wizard springt al naar de stap van de eerste fout, maar de
+                andere fouten staan dan op stappen die je niet ziet. Vandaar de
+                volledige lijst hier: zonder dat lijkt de wizard klaar zodra dit
+                ene veld goed staat. */}
             {serverState.status === "error" && serverState.message ? (
-              <Alert variant="danger" title={serverState.message} className="mt-4" />
+              <ErrorSummary
+                error={serverState.message}
+                fields={serverState.fieldErrors}
+                labels={DRAFT_FIELD_LABELS}
+                className="mt-4"
+              />
             ) : null}
 
             <div className="mt-5">

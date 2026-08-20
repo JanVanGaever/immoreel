@@ -1,3 +1,6 @@
+import { AppError } from "@/lib/errors/app-error";
+import { codeForStatus } from "@/lib/errors/catalogue";
+import { readErrorEnvelope } from "@/lib/errors/normalize";
 import type { ID, UploadAsset, UploadOrderEntry } from "@/types";
 
 /**
@@ -8,6 +11,13 @@ import type { ID, UploadAsset, UploadOrderEntry } from "@/types";
  * er nog geen object storage is, draait de app op `createFakeTransport`; de
  * dag dat de backend er staat, wissel je die om voor `createXhrTransport`
  * zonder dat er aan een component iets verandert.
+ *
+ * **Wat een transport gooit, is een `AppError`** (`src/lib/errors`). Niet uit
+ * netheid: de uploadlijst beslist op de code of ze het zelf nog eens probeert.
+ * Een bestand dat te groot is (`too-large`) blijft te groot, hoe vaak je ook
+ * herbegint; een verbinding die wegviel (`network`) is bij de tweede poging
+ * vaak weer terug. Met een kale `Error` is dat verschil niet te maken, en dan
+ * krijgt de gebruiker drie keer dezelfde melding met drie keer dezelfde wacht.
  */
 
 export type UploadContext = {
@@ -75,7 +85,7 @@ export function createXhrTransport({
 
       request.addEventListener("load", () => {
         if (request.status < 200 || request.status >= 300) {
-          reject(new Error(errorMessageForStatus(request.status)));
+          reject(errorForResponse(request));
           return;
         }
 
@@ -83,8 +93,18 @@ export function createXhrTransport({
         resolve(parseResponse(request.responseText));
       });
 
-      request.addEventListener("error", () => reject(new Error("Geen verbinding met de server.")));
-      request.addEventListener("timeout", () => reject(new Error("De upload duurde te lang.")));
+      request.addEventListener("error", () =>
+        reject(
+          new AppError(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "network", {
+            detail: `XHR error op ${endpoint}`,
+            context: { fileName: file.name },
+          }),
+        ),
+      );
+
+      request.addEventListener("timeout", () =>
+        reject(new AppError("timeout", { detail: `XHR timeout op ${endpoint}` })),
+      );
 
       signal.addEventListener("abort", () => request.abort(), { once: true });
 
@@ -118,7 +138,7 @@ export function createFakeTransport(options: { bytesPerSecond?: number; failEver
         stop();
 
         if (failEvery > 0 && index % failEvery === 0) {
-          reject(new Error("De opslag antwoordde niet."));
+          reject(new AppError("storage", { domain: "upload", detail: "Nagebootste fout." }));
         } else {
           resolve({ remoteId: `ast_${assetId.slice(-8)}` });
         }
@@ -150,6 +170,17 @@ export function toUploadOrder(assets: UploadAsset[]): UploadOrderEntry[] {
   }));
 }
 
+/** JSON als het JSON is, en anders niets. Een kapot antwoord is geen tweede fout. */
+function parseJson(responseText: string): unknown {
+  if (!responseText) return undefined;
+
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    return undefined;
+  }
+}
+
 function parseResponse(responseText: string): UploadResult {
   if (!responseText) return {};
 
@@ -167,10 +198,25 @@ function parseResponse(responseText: string): UploadResult {
   }
 }
 
-function errorMessageForStatus(status: number): string {
-  if (status === 413) return "Dit bestand is te groot voor de server.";
-  if (status === 401 || status === 403) return "Je hebt geen toestemming om te uploaden.";
-  if (status === 0) return "De verbinding viel weg.";
+/**
+ * De fout die bij dit antwoord hoort.
+ *
+ * De foutenvelop van onze eigen API (`{ error: { code, message } }`) wint als
+ * ze er is: die weet preciezer wat er misging dan de statuscode. Staat er niets
+ * bruikbaar in — een proxy, een opslag die niet van ons is — dan valt het terug
+ * op de status.
+ */
+function errorForResponse(request: XMLHttpRequest): AppError {
+  const status = request.status;
 
-  return `De server gaf een fout (${status}).`;
+  // Status 0 betekent dat er nooit een antwoord kwam: de verbinding viel weg.
+  if (status === 0) return new AppError("network", { detail: "XHR zonder antwoord (status 0)." });
+
+  const envelope = readErrorEnvelope(parseJson(request.responseText));
+
+  return new AppError(envelope?.code ?? codeForStatus(status), {
+    message: envelope?.message,
+    detail: `HTTP ${status} bij het uploaden.`,
+    context: { status },
+  });
 }

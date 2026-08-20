@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,7 @@ export function ForgotPasswordForm() {
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
       {state.status === "error" && state.message ? (
-        <Alert variant="danger" title={state.message} />
+        <ErrorSummary error={state.message} />
       ) : null}
 
       <FormField

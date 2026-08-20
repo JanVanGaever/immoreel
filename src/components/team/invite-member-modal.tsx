@@ -3,10 +3,11 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MailCheck, Send } from "lucide-react";
-import { InviteLink } from "@/components/team/invite-link";
 import { RolePicker } from "@/components/team/role-picker";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
+import { CopyLink } from "@/components/ui/copy-link";
 import { FieldError, FormField } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
@@ -80,7 +81,7 @@ export function InviteMemberModal({
             {state.inviteUrl ? (
               <div>
                 <p className="mb-1.5 text-sm font-medium text-fg">De uitnodigingslink</p>
-                <InviteLink url={state.inviteUrl} />
+                <CopyLink url={state.inviteUrl} />
                 <p className="mt-1.5 text-xs text-fg-subtle">
                   Straks niet meer op te vragen: we bewaren alleen een versleutelde versie.
                   Kwijt? Stuur de uitnodiging opnieuw.
@@ -102,7 +103,7 @@ export function InviteMemberModal({
         <form key={formKey} action={action} noValidate>
           <ModalBody className="space-y-5">
             {state.status === "fout" && state.message ? (
-              <Alert variant="danger" title={state.message} />
+              <ErrorSummary error={state.message} />
             ) : null}
 
             <FormField

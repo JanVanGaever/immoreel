@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createLogger } from "@/lib/errors/logger";
+import { toAppError } from "@/lib/errors/normalize";
 
 /**
  * Automatisch bewaren.
@@ -48,6 +50,8 @@ export type AutosaveController = {
 };
 
 const DEFAULT_DELAY_MS = 900;
+
+const log = createLogger("editor");
 
 export function useAutosave<T>({
   value,
@@ -100,9 +104,15 @@ export function useAutosave<T>({
       // Tijdens het bewaren kan er alweer iets gewijzigd zijn; dan is dit
       // scherm niet "bewaard", en het effect hieronder plant meteen opnieuw.
       setStatus(serializedRef.current === attempt ? "bewaard" : "wijzigingen");
-    } catch {
+    } catch (cause) {
+      // Geen kale zin meer: de foutlaag weet het verschil tussen een tabblad
+      // zonder verbinding en een server die een fout teruggaf, en de balk
+      // hoort dat verschil te tonen.
+      const failure = toAppError(cause, { fallback: "server-error" });
+
+      log.error("bewaren mislukt", failure);
       setStatus("mislukt");
-      setError("Geen verbinding met de server.");
+      setError(failure.message);
     } finally {
       isSavingRef.current = false;
     }

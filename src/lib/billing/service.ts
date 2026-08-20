@@ -4,6 +4,7 @@ import { describeInvoice, failureMessage, invoiceStatusFor } from "@/lib/billing
 import { findPaymentMethod, fromMollieMethod } from "@/lib/billing/methods";
 import { VAT_RATE, getPlan, grossPriceInCents, priceBreakdown } from "@/lib/billing/plans";
 import { APP_NAME } from "@/lib/constants";
+import { notify } from "@/lib/notifications/service";
 import {
   cancelSubscription as cancelMollieSubscription,
   checkoutUrl,
@@ -210,7 +211,7 @@ export async function applyPayment(paymentId: string): Promise<PaymentOutcome> {
   const planId = resolvePlanId(payment, await store.getSubscription(organisationId));
   const method = fromMollieMethod(payment.method);
 
-  await store.recordInvoice({
+  const invoice = await store.recordInvoice({
     organisationId,
     molliePaymentId: payment.id,
     status: invoiceStatusFor(payment.status),
@@ -225,11 +226,30 @@ export async function applyPayment(paymentId: string): Promise<PaymentOutcome> {
   if (payment.status === "paid") {
     await onPaid({ payment, organisationId, purpose, planId, method });
 
+    // Na het verwerken en niet ervoor: een melding over een betaling die daarna
+    // alsnog stukloopt, is erger dan geen melding. `notify()` gooit nooit, dus
+    // de webhook blijft hierdoor niet hangen (zie lib/notifications/service.ts).
+    await notify({
+      topic: "betaling-gelukt",
+      organisationId,
+      invoiceId: invoice.id,
+      amountInCents: invoice.amountInCents,
+      planId,
+    });
+
     return { handled: true, reason: `Betaling ${payment.id} verwerkt als ${purpose}.` };
   }
 
   if (isFinalFailure(payment)) {
     await onFailed({ payment, organisationId, purpose });
+
+    await notify({
+      topic: "betaling-mislukt",
+      organisationId,
+      invoiceId: invoice.id,
+      amountInCents: invoice.amountInCents,
+      reason: failureMessage(payment),
+    });
 
     return { handled: true, reason: `Betaling ${payment.id} mislukt (${payment.status}).` };
   }

@@ -1,12 +1,14 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, LogOut, Menu, Plus, Search, Settings } from "lucide-react";
+import { LogOut, Menu, Plus, Search, Settings, UserRound } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { NotificationMenu } from "@/components/notifications";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuItem,
@@ -44,14 +46,20 @@ export function Topbar({ user, organisation, role, onMenuClick }: TopbarProps) {
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <Button size="sm" className="hidden sm:inline-flex">
+        {/* De belangrijkste actie van de app hoort op elk scherm bereikbaar te
+            zijn. Op een telefoon is er geen plaats voor het woord erbij, dus
+            blijft alleen het plusje staan — met een naam voor wie hem niet
+            ziet. */}
+        <Link
+          href={ROUTES.newProject}
+          aria-label="Nieuwe video"
+          className={buttonClasses("primary", "sm", "max-sm:size-[var(--control-sm)] max-sm:px-0")}
+        >
           <Plus />
-          Nieuwe video
-        </Button>
+          <span className="hidden sm:inline">Nieuwe video</span>
+        </Link>
         <ThemeToggle />
-        <Button variant="ghost" size="icon" aria-label="Meldingen">
-          <Bell />
-        </Button>
+        <NotificationMenu />
 
         <div className="ml-1.5 border-l border-border pl-3">
           <DropdownMenu
@@ -82,6 +90,10 @@ export function Topbar({ user, organisation, role, onMenuClick }: TopbarProps) {
             </div>
 
             <DropdownMenuSeparator />
+
+            <DropdownMenuItem icon={<UserRound />} onSelect={() => router.push(ROUTES.account)}>
+              Mijn account
+            </DropdownMenuItem>
 
             <DropdownMenuItem icon={<Settings />} onSelect={() => router.push(ROUTES.settings)}>
               Instellingen

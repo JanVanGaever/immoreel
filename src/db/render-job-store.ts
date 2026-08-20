@@ -1,3 +1,4 @@
+import { isSeedEnabled, seedRenderJobs } from "@/db/seed";
 import { canTransition, statusForStage } from "@/lib/render/status";
 import { keepMonotonic } from "@/lib/render/progress";
 import type { ID, RenderJob, RenderJobError, RenderStageId } from "@/types";
@@ -67,6 +68,12 @@ export type RenderJobStore = {
   find(jobId: ID): Promise<RenderJob | null>;
   findForOrganisation(organisationId: ID, jobId: ID): Promise<RenderJob | null>;
   listForProject(organisationId: ID, projectId: ID): Promise<RenderJob[]>;
+  /**
+   * Alle jobs, over alle organisaties heen, nieuwste eerst. Alleen voor het
+   * interne supportpaneel (`src/db/admin-store.ts`) — dit is de lijst waarin
+   * "wat is er vandaag misgelopen?" beantwoord wordt.
+   */
+  listAll(): Promise<RenderJob[]>;
   /** Neemt de job over. Geeft `already-done` als er niets meer te doen valt. */
   claim(jobId: ID, lease: RenderLease): Promise<ClaimResult>;
   /**
@@ -99,9 +106,26 @@ declare global {
 }
 
 function getData(): Map<ID, RenderJob> {
-  globalThis.__immoreelRenderJobs ??= new Map();
+  globalThis.__immoreelRenderJobs ??= seed(new Map());
 
   return globalThis.__immoreelRenderJobs;
+}
+
+/**
+ * Twee afgewerkte renders en een mislukte (`src/db/seed/renders.ts`).
+ *
+ * Hun ids zijn op dezelfde manier berekend als die van een echte export, dus
+ * een nieuwe export van hetzelfde project met dezelfde preset komt bij deze
+ * rijen uit: "deze render bestaat al". Dat is de idempotentie waar de hele
+ * pijplijn op staat, en ze is hiermee in development te zien zonder dat er ooit
+ * een worker gedraaid heeft.
+ */
+function seed(data: Map<ID, RenderJob>): Map<ID, RenderJob> {
+  if (!isSeedEnabled()) return data;
+
+  for (const job of seedRenderJobs()) data.set(job.id, job);
+
+  return data;
 }
 
 /** Alleen de houder van de lease mag schrijven; een lege lease hoort bij niemand. */
@@ -160,6 +184,10 @@ const memoryStore: RenderJobStore = {
     return [...getData().values()]
       .filter((job) => job.organisationId === organisationId && job.projectId === projectId)
       .sort((a, b) => b.queuedAt.localeCompare(a.queuedAt));
+  },
+
+  async listAll() {
+    return [...getData().values()].sort((a, b) => b.queuedAt.localeCompare(a.queuedAt));
   },
 
   async claim(jobId, lease) {

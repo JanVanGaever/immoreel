@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CircleCheck, CircleX, Clock, RotateCcw } from "lucide-react";
 import { usePaymentStatus } from "@/components/billing/use-payment-status";
-import { Alert } from "@/components/ui/alert";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ErrorAlert } from "@/components/ui/error-state";
 import { Spinner } from "@/components/ui/spinner";
 import { findPaymentMethod } from "@/lib/billing/methods";
 import { getPlan } from "@/lib/billing/plans";
@@ -51,15 +51,16 @@ export function PaymentResult({ paymentId }: PaymentResultProps) {
   if (!payment) {
     if (error) {
       return (
-        <Result
-          tone="danger"
-          title="We vinden deze betaling niet"
-          lead={error}
-        >
+        <Result tone="danger" title="We konden je betaling niet controleren" lead={error.message}>
           <p className="text-sm text-fg-muted">
             Controleer op de facturatiepagina of je betaling doorgegaan is. Staat ze daar niet, dan
             is er niets aangerekend.
           </p>
+
+          {/* De fout zelf staat er nog eens onder, met haar code. Dat is niet
+              dubbelop: de zin hierboven zegt wat de klant nu doet, de code is
+              wat hij doorgeeft als hij ons belt. */}
+          <ErrorAlert error={error} className="mt-4" />
 
           <div className="mt-6 flex flex-wrap gap-2">
             <Link href={ROUTES.billing} className={buttonClasses("primary", "md")}>
@@ -149,7 +150,17 @@ export function PaymentResult({ paymentId }: PaymentResultProps) {
           : `Zodra ${method.label} bevestigt, staat ${plan.name} actief.`
       }
     >
-      {error ? <Alert variant="warning" title={error} className="mb-4" /> : null}
+      {/* De betaling loopt nog én het controleren hapert. Geen reden tot paniek
+          — daarom als melding náást de stand, niet in plaats van. */}
+      {error ? (
+        <ErrorAlert
+          error={error}
+          hint="We konden de stand net niet ophalen. Dat zegt niets over je betaling zelf."
+          onRetry={check}
+          retryLabel="Opnieuw controleren"
+          className="mb-4"
+        />
+      ) : null}
 
       <p className="text-sm text-fg-muted">
         Je hoeft hier niet te blijven wachten. We sturen je een e-mail zodra de betaling rond is, en

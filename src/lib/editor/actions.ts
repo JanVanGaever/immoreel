@@ -1,19 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { getBrandKitStore } from "@/db/brand-kit-store";
-import { getProjectStore } from "@/db/project-store";
-import { getTemplateStore } from "@/db/template-store";
+import { isApiError } from "@/lib/api/errors";
 import { assertPermission } from "@/lib/auth/session";
-import type { ExportRequest, ExportState, SaveState } from "@/lib/editor/action-state";
-import { toEditorDocument, type ProjectPatch } from "@/lib/editor/document";
-import { buildExportBatch, describeFormat } from "@/lib/editor/export-presets";
-import { buildRenderPlan } from "@/lib/editor/render-plan";
-import { hasErrors, sanitizePatch, validatePatch } from "@/lib/editor/validation";
-import { ROUTES } from "@/lib/constants";
-import { isQueueConfigured } from "@/workers/config";
-import { enqueueRenderJob } from "@/workers/queue";
-import { ensureInlineRenderWorker } from "@/workers/inline";
+import type { ExportState, SaveState } from "@/lib/editor/action-state";
+import type { ProjectPatch } from "@/lib/editor/document";
+import type { EditorErrors } from "@/lib/editor/validation";
+import { startRenders } from "@/lib/projects/renders";
+import { saveProjectPatch } from "@/lib/projects/service";
 import type { ID } from "@/types";
 
 /**
@@ -22,44 +15,31 @@ import type { ID } from "@/types";
  * De editor bewaart automatisch, maar dat maakt de browser niet
  * betrouwbaarder: rol, eigenaarschap en validatie gaan hier opnieuw door de
  * molen, precies zoals bij de wizard.
+ *
+ * Het werk zelf staat in `src/lib/projects/`, want de HTTP-API doet exact
+ * hetzelfde. Wat hier overblijft is de vertaling: van een gegooide fout naar
+ * de vorm waarin `useActionState` haar verwacht.
  */
 
 export async function saveProjectAction(projectId: ID, patch: ProjectPatch): Promise<SaveState> {
   const { organisation } = await assertPermission("project:edit");
 
-  const templates = await getTemplateStore().listTemplates(organisation.id);
-  const errors = validatePatch(patch, templates);
+  try {
+    const project = await saveProjectPatch(organisation.id, projectId, patch);
 
-  if (hasErrors(errors)) {
     return {
-      status: "fout",
-      message: "Deze wijziging kon niet bewaard worden.",
-      fieldErrors: errors,
+      status: "opgeslagen",
+      savedAt: project.updatedAt,
+      durationInSeconds: project.durationInSeconds,
     };
+  } catch (error) {
+    if (!isApiError(error)) throw error;
+
+    // De velden van een `ApiError` zijn dezelfde als die van `EditorErrors`:
+    // ze komen uit `validatePatch()`, alleen dan zonder de lege plekken.
+    return { status: "fout", message: error.message, fieldErrors: error.fields as EditorErrors };
   }
-
-  const project = await getProjectStore().updateProject(
-    organisation.id,
-    projectId,
-    sanitizePatch(patch),
-  );
-
-  if (!project) {
-    return { status: "fout", message: "Dit project bestaat niet meer." };
-  }
-
-  // De projectlijst en de detailpagina tonen titel, duur en status; die zijn
-  // na een autosave verouderd.
-  revalidatePath(ROUTES.projects);
-  revalidatePath(ROUTES.project(projectId));
-
-  return {
-    status: "opgeslagen",
-    savedAt: project.updatedAt,
-    durationInSeconds: project.durationInSeconds,
-  };
 }
-
 
 /**
  * Een export aanvragen.
@@ -77,82 +57,29 @@ export async function saveProjectAction(projectId: ID, patch: ProjectPatch): Pro
 export async function exportProjectAction(projectId: ID, presetIds: ID[]): Promise<ExportState> {
   const { organisation, user } = await assertPermission("project:edit");
 
-  if (!isQueueConfigured()) {
-    return {
-      status: "fout",
-      message: "De renderwachtrij is niet geconfigureerd. Zet REDIS_URL en start de worker.",
-    };
-  }
-
-  const project = await getProjectStore().findProject(organisation.id, projectId);
-  if (!project) return { status: "fout", message: "Dit project bestaat niet meer." };
-
-  if (presetIds.length === 0) {
-    return { status: "fout", message: "Kies minstens één platform om naar te exporteren." };
-  }
-
-  // De huisstijl komt van de server en niet uit het tabblad: wat de editor
-  // toonde kan intussen achterhaald zijn, en een render hoort de huisstijl te
-  // krijgen die er nú staat.
-  const brand = await getBrandKitStore().getBrandKit(organisation.id);
-  const document = toEditorDocument(project, brand);
-
-  // Dezelfde doorrekening als in de editor, maar op wat er nú op de server
-  // staat. De browser mag hier niet het laatste woord hebben: een tabblad dat
-  // een uur openstond, weet niet meer wat er intussen bewaard is.
-  const batch = buildExportBatch(presetIds, {
-    aspectRatio: project.aspectRatio,
-    durationInSeconds: project.durationInSeconds,
-    sceneCount: project.scenes.length,
-    title: project.title,
-  });
-
-  if (batch.blocking.length > 0) {
-    return { status: "fout", message: batch.blocking[0]!.message };
-  }
-
-  if (batch.items.length === 0) {
-    return { status: "fout", message: "Geen van de gekozen platformen bestaat nog." };
-  }
-
-  const requests: ExportRequest[] = [];
-
-  // Alleen bij ontwikkelen: dan draait de worker mee in dit proces.
-  ensureInlineRenderWorker();
-
-  for (const item of batch.items) {
-    const { job, reason } = await enqueueRenderJob({
+  try {
+    // Het echte werk staat in `lib/projects/renders.ts`, zodat de knop in de
+    // editor en `POST /api/projects/:id/renders` niet uit elkaar kunnen lopen.
+    const { requests } = await startRenders({
       organisationId: organisation.id,
-      projectId,
-      presetId: item.preset.id,
       requestedBy: user.id,
-      plan: buildRenderPlan(document, item.preset),
+      projectId,
+      presetIds,
     });
 
-    requests.push({
-      jobId: job.id,
-      presetId: item.preset.id,
-      label: item.preset.label,
-      format: describeFormat(item.preset),
-      fileName: item.fileName,
-      isNew: reason === "new" || reason === "retried",
-    });
+    return {
+      status: "wachtrij",
+      message:
+        requests.length === 1
+          ? `${requests[0]!.label} staat in de wachtrij.`
+          : `${requests.length} exports staan in de wachtrij.`,
+      requests,
+    };
+  } catch (error) {
+    // Wat de service gooit, is al in het Nederlands en al voor de gebruiker
+    // geschreven; hier wordt het alleen de vorm die de knop verwacht.
+    if (isApiError(error)) return { status: "fout", message: error.message };
+
+    throw error;
   }
-
-  // De worker zet de status verder (`renderen`, `klaar`, `mislukt`); dit is
-  // alleen wat er nu al klopt, zodat de lijst niet achterloopt tot de eerste
-  // worker wakker wordt.
-  await getProjectStore().setProjectStatus(organisation.id, projectId, "wachtrij");
-
-  revalidatePath(ROUTES.projects);
-  revalidatePath(ROUTES.project(projectId));
-
-  return {
-    status: "wachtrij",
-    message:
-      requests.length === 1
-        ? `${requests[0]!.label} staat in de wachtrij.`
-        : `${requests.length} exports staan in de wachtrij.`,
-    requests,
-  };
 }

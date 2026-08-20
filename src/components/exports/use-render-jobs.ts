@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createLogger } from "@/lib/errors/logger";
+import { toAppError } from "@/lib/errors/normalize";
+import { requestJson } from "@/lib/errors/request";
 import { API_ROUTES } from "@/lib/constants";
 import { isTerminalStatus } from "@/lib/render/status";
-import type { ID, RenderJobSnapshot } from "@/types";
+import type { AppErrorShape, ID, RenderJobSnapshot } from "@/types";
 
 /**
  * Meekijken met de renders van één project.
@@ -35,6 +38,16 @@ export type RenderFeedStatus =
 export type RenderFeed = {
   snapshots: RenderJobSnapshot[];
   status: RenderFeedStatus;
+  /**
+   * Waarom we niets meer horen, of `null` zolang het werkt.
+   *
+   * Bewust pas gevuld ná een reeks mislukte pogingen (`FAILURES_BEFORE_ALARM`).
+   * Eén mislukte poll is geen nieuws — de volgende komt over vier seconden — en
+   * een rode balk die om de vier seconden aan en uit gaat, is erger dan geen
+   * balk. Blijft het misgaan, dan hoort de gebruiker te weten dat wat hij ziet
+   * niet meer meebeweegt met wat er echt gebeurt.
+   */
+  error: AppErrorShape | null;
   /** Zelf een stand binnenbrengen, bijvoorbeeld na het opnieuw insturen. */
   apply: (incoming: readonly RenderJobSnapshot[]) => void;
 };
@@ -42,12 +55,18 @@ export type RenderFeed = {
 /** Hoe vaak we het zelf gaan vragen wanneer de eventstroom niet werkt. */
 const POLL_INTERVAL_MS = 4_000;
 
+/** Zoveel pogingen op rij mislukt: nu is het geen hapering meer. */
+const FAILURES_BEFORE_ALARM = 3;
+
+const log = createLogger("render-feed");
+
 export function useRenderJobs(projectId: ID, initial: readonly RenderJobSnapshot[]): RenderFeed {
   const [byJob, setByJob] = useState<Record<ID, RenderJobSnapshot>>(() => index(initial));
   /** Blijft staan zolang deze pagina open is: eenmaal terugvallen is terugvallen. */
   const [pollOnly, setPollOnly] = useState(false);
   /** De stand van de eventstroom. Wordt alleen gezet vanuit de verbinding zelf. */
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
+  const [error, setError] = useState<AppErrorShape | null>(null);
 
   const apply = useCallback((incoming: readonly RenderJobSnapshot[]) => {
     setByJob((current) => merge(current, incoming));
@@ -66,7 +85,12 @@ export function useRenderJobs(projectId: ID, initial: readonly RenderJobSnapshot
   useEffect(() => {
     if (!isActive) return;
 
-    if (pollOnly) return poll(projectId, (incoming) => applyRef.current(incoming));
+    if (pollOnly) {
+      return poll(projectId, {
+        onSnapshots: (incoming) => applyRef.current(incoming),
+        onFailure: setError,
+      });
+    }
 
     const source = new EventSource(API_ROUTES.projectRenderStream(projectId));
 
@@ -96,29 +120,53 @@ export function useRenderJobs(projectId: ID, initial: readonly RenderJobSnapshot
   // gaan lopen met de andere drie.
   const status: RenderFeedStatus = !isActive ? "idle" : pollOnly ? "polling" : connection;
 
-  return { snapshots, status, apply };
+  // Afgeleid en niet gewist: zodra alles klaar is, valt er niets meer te volgen
+  // en is een melding over het volgen ook niet meer aan de orde.
+  return { snapshots, status, error: isActive ? error : null, apply };
 }
 
-/** Om de paar seconden de stand opvragen. Geeft de opruimfunctie terug. */
-function poll(projectId: ID, onSnapshots: (snapshots: RenderJobSnapshot[]) => void): () => void {
+type PollHandlers = {
+  onSnapshots: (snapshots: RenderJobSnapshot[]) => void;
+  /** `null` zodra er weer een antwoord binnenkomt. */
+  onFailure: (error: AppErrorShape | null) => void;
+};
+
+/**
+ * Om de paar seconden de stand opvragen. Geeft de opruimfunctie terug.
+ *
+ * Eén mislukte poging is geen ramp: de volgende komt er zo aan, en de balk
+ * blijft ondertussen staan waar hij stond. Pas na een reeks mislukkingen op rij
+ * gaat de melding aan — dan is er iets aan de hand dat de gebruiker anders pas
+ * merkt als hij de pagina ververst.
+ */
+function poll(projectId: ID, { onSnapshots, onFailure }: PollHandlers): () => void {
   const controller = new AbortController();
+  let failures = 0;
 
   const tick = async (): Promise<void> => {
     try {
-      const response = await fetch(API_ROUTES.projectRenders(projectId), {
-        signal: controller.signal,
-        cache: "no-store",
+      const { jobs } = await requestJson<{ jobs: RenderJobSnapshot[] }>(
+        API_ROUTES.projectRenders(projectId),
+        { signal: controller.signal },
+      );
+
+      failures = 0;
+      onFailure(null);
+
+      if (Array.isArray(jobs)) onSnapshots(jobs);
+    } catch (cause) {
+      if (controller.signal.aborted) return;
+
+      const failure = toAppError(cause, { context: { projectId } });
+
+      failures += 1;
+      log.warn("voortgang ophalen mislukt", {
+        projectId,
+        errorCode: failure.code,
+        failures,
       });
 
-      if (!response.ok) return;
-
-      const payload: unknown = await response.json();
-      if (!payload || typeof payload !== "object" || !("jobs" in payload)) return;
-
-      const jobs = (payload as { jobs: unknown }).jobs;
-      if (Array.isArray(jobs)) onSnapshots(jobs as RenderJobSnapshot[]);
-    } catch {
-      // Een mislukte poging is geen ramp: de volgende komt er zo aan.
+      if (failures >= FAILURES_BEFORE_ALARM) onFailure(failure.toShape());
     }
   };
 

@@ -40,7 +40,11 @@ export function EditorTopbar({
       >
         <ArrowLeft />
       </Link>
-      <Logo showWordmark={false} />
+      {/* Op een telefoon staat de pijl terug er al; een logo ernaast kost
+          alleen maar plaats die de projectnaam beter kan gebruiken. */}
+      <span className="hidden sm:inline-flex">
+        <Logo showWordmark={false} />
+      </span>
 
       <input
         value={editor.document.title}
@@ -48,7 +52,7 @@ export function EditorTopbar({
         maxLength={TITLE_MAX_LENGTH}
         aria-label="Naam van het project"
         placeholder="Naamloos project"
-        className="w-24 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-fg hover:border-border focus:border-brand focus:bg-surface focus:outline-none sm:max-w-64"
+        className="h-9 w-24 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm font-medium text-fg hover:border-border focus:border-brand focus:bg-surface focus:outline-none sm:max-w-64"
       />
 
       {/* Op een telefoon is de plaats voor de naam belangrijker dan voor de status. */}
@@ -61,7 +65,7 @@ export function EditorTopbar({
         {editor.scenes.length} foto&apos;s
       </span>
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex items-center gap-2 sm:gap-3">
         <SaveIndicator save={editor.save} />
 
         {/* Eerst kijken, dan pas renderen: een export van twintig minuten is

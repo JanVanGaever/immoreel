@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createLogger } from "@/lib/errors/logger";
+import { isAbortError, toAppError } from "@/lib/errors/normalize";
+import { withRetry } from "@/lib/errors/retry";
 import type { UploadTransport } from "@/lib/uploads/transport";
 import {
   PHOTO_UPLOAD_CONSTRAINTS,
@@ -17,7 +20,18 @@ import type { ID, UploadAsset, UploadRejection } from "@/types";
  * De volgorde van `assets` ís de volgorde van de foto's. Er wordt geen
  * `position` bijgehouden, want twee bronnen van waarheid lopen vroeg of laat
  * uit elkaar — bij het bewaren maak je er met `toUploadOrder()` posities van.
+ *
+ * **Mislukken gaat in twee stappen.** Een fout waarvan de catalogus zegt dat
+ * hij vanzelf overgaat — een verbinding die hapert, opslag die even niet
+ * antwoordt — probeert deze hook zelf opnieuw, met oplopende tussenpozen. De
+ * foto blijft dan gewoon "uploaden" en de teller loopt: dat is eerlijker dan
+ * een rood kruis dat een seconde later toch weer groen wordt. Pas als ook dat
+ * niet lukt, of als de fout er een is die zich niet laat overrulen (een bestand
+ * dat te groot is blijft te groot), komt de melding in beeld — met de knop
+ * ernaast als de gebruiker het alsnog mag proberen.
  */
+
+const log = createLogger("upload");
 
 export type UseUploadsOptions = {
   /** Waar de bestanden heen gaan. Zie `@/lib/uploads/transport`. */
@@ -79,16 +93,6 @@ function toAsset(file: File): UploadAsset {
     status: "queued",
     progress: 0,
   };
-}
-
-function isAbort(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
-}
-
-function messageFor(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-
-  return "De upload is mislukt.";
 }
 
 export function useUploads({
@@ -154,17 +158,35 @@ export function useUploads({
 
       startedRef.current.add(asset.id);
       controllersRef.current.set(asset.id, controller);
-      patch(asset.id, { status: "uploading", progress: 0, error: undefined });
+      patch(asset.id, { status: "uploading", progress: 0, attempts: 0, error: undefined });
 
       try {
-        const result = await transportRef.current({
-          file,
-          assetId: asset.id,
-          signal: controller.signal,
-          onProgress: (percentage) => {
-            patch(asset.id, { progress: Math.min(Math.max(percentage, 0), 100) });
+        // `withRetry` voert het beleid uit dat bij de fout hoort; wat níet
+        // vanzelf overgaat, komt er meteen weer uit.
+        const result = await withRetry(
+          () =>
+            transportRef.current({
+              file,
+              assetId: asset.id,
+              signal: controller.signal,
+              onProgress: (percentage) => {
+                patch(asset.id, { progress: Math.min(Math.max(percentage, 0), 100) });
+              },
+            }),
+          {
+            signal: controller.signal,
+            onRetry: (error, attempt, delayMs) => {
+              log.warn("upload wordt opnieuw geprobeerd", {
+                fileName: asset.fileName,
+                errorCode: error.code,
+                attempt,
+                delayMs,
+              });
+
+              patch(asset.id, { progress: 0, attempts: attempt - 1 });
+            },
           },
-        });
+        );
 
         filesRef.current.delete(asset.id);
         patch(asset.id, {
@@ -174,13 +196,18 @@ export function useUploads({
           remoteId: result.remoteId ?? null,
           url: result.url ?? null,
         });
-      } catch (error) {
-        patch(
-          asset.id,
-          isAbort(error)
-            ? { status: "canceled", progress: 0 }
-            : { status: "error", error: messageFor(error) },
-        );
+      } catch (cause) {
+        if (isAbortError(cause)) {
+          patch(asset.id, { status: "canceled", progress: 0, error: undefined });
+        } else {
+          const failure = toAppError(cause, {
+            fallback: "upload-failed",
+            context: { fileName: asset.fileName, sizeInBytes: asset.sizeInBytes },
+          });
+
+          log.error("upload definitief mislukt", failure, { fileName: asset.fileName });
+          patch(asset.id, { status: "error", error: failure.toShape() });
+        }
       } finally {
         controllersRef.current.delete(asset.id);
         startedRef.current.delete(asset.id);
@@ -265,7 +292,9 @@ export function useUploads({
       // bij een asset die al op de server staat.
       if (!filesRef.current.has(assetId)) return;
 
-      patch(assetId, { status: "queued", progress: 0, error: undefined });
+      // De teller gaat terug naar nul: dit is een nieuwe opdracht van de
+      // gebruiker, geen vervolg op de pogingen die de hook zelf al deed.
+      patch(assetId, { status: "queued", progress: 0, attempts: 0, error: undefined });
     },
     [patch],
   );

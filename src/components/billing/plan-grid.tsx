@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PlanCard } from "@/components/billing/plan-card";
 import { Price } from "@/components/billing/price";
 import { Alert } from "@/components/ui/alert";
+import { ErrorSummary } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { initialBillingState, type BillingActionState } from "@/lib/billing/action-state";
@@ -113,7 +114,7 @@ export function PlanGrid({ subscription, canManage }: PlanGridProps) {
             />
 
             <ModalBody className="space-y-4">
-              {state.status === "fout" ? <Alert variant="danger" title={state.message} /> : null}
+              {state.status === "fout" ? <ErrorSummary error={state.message} /> : null}
 
               <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-surface-subtle px-4 py-3">
                 <div className="min-w-0">

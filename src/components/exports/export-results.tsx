@@ -6,9 +6,10 @@ import { Film, Pencil } from "lucide-react";
 import { ExportCard } from "@/components/exports/export-card";
 import { ExportOverviewPanel } from "@/components/exports/export-overview";
 import { useRenderJobs } from "@/components/exports/use-render-jobs";
-import { Alert } from "@/components/ui/alert";
+import { useRenderToasts } from "@/components/notifications";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorAlert } from "@/components/ui/error-state";
 import { ROUTES } from "@/lib/constants";
 import { initialRetryState, type RetryState } from "@/lib/exports/action-state";
 import { retryExportsAction } from "@/lib/exports/actions";
@@ -48,6 +49,10 @@ export function ExportResults({
     [feed.snapshots, project],
   );
   const overview = useMemo(() => summariseExports(results), [results]);
+
+  // Meekijken met wat er toch al binnenkomt: een export die tijdens het kijken
+  // klaar of stuk raakt, is een toast waard. Zie `useRenderToasts`.
+  useRenderToasts(projectId, project.title, results);
 
   function retryPresets(presetIds: readonly ID[]) {
     if (presetIds.length === 0) return;
@@ -93,8 +98,20 @@ export function ExportResults({
         onRetryFailed={() => retryPresets(overview.retryablePresetIds)}
       />
 
+      {/* Twee soorten fouten, en ze zeggen iets anders. De eerste: het opnieuw
+          insturen zelf lukte niet. De tweede: de voortgang komt niet meer
+          binnen — de renders lopen dan misschien gewoon door, maar wat hier
+          staat is niet meer actueel, en dat hoort de gebruiker te weten. */}
       {retry.status === "fout" ? (
-        <Alert variant="danger" title={retry.message} className="mb-4" />
+        <ErrorAlert error={retry.message} className="mb-4" />
+      ) : null}
+
+      {feed.error ? (
+        <ErrorAlert
+          error={feed.error}
+          hint="De voortgang hieronder loopt niet meer mee. Ververs de pagina voor de huidige stand; je exports gaan intussen gewoon door."
+          className="mb-4"
+        />
       ) : null}
 
       <ul className="space-y-3">

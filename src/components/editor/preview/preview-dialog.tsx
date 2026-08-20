@@ -38,7 +38,9 @@ export function PreviewDialog({
         description={`${editor.scenes.length} foto's · ${formatDuration(editor.durationInSeconds)} · ${editor.document.aspectRatio}`}
       />
 
-      <PreviewPlayer document={editor.document} className="h-[min(70svh,34rem)]" />
+      {/* Krimpt mee met het venster: op een liggende telefoon is 70svh meer
+          dan er na kop en voet overblijft. */}
+      <PreviewPlayer document={editor.document} className="min-h-0 flex-1 basis-[min(70svh,34rem)]" />
 
       <ModalFooter>
         <Button variant="secondary" onClick={onClose}>

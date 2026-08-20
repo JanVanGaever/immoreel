@@ -14,7 +14,14 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const NOTICES: Record<string, string> = {
   "magic-link-ongeldig": "Die inloglink is verlopen of al gebruikt. Vraag een nieuwe aan.",
   uitgelogd: "Je bent uitgelogd.",
+  "account-verwijderd": "Je account is verwijderd. Bedankt voor het gebruik van Immoreel.",
+  "e-mailadres-gewijzigd": "Je nieuwe e-mailadres is bevestigd. Log ermee in.",
+  "e-mail-link-ongeldig": "Die bevestigingslink is verlopen of al gebruikt. Vraag een nieuwe aan.",
+  "e-mail-bezet": "Dat e-mailadres is intussen door iemand anders in gebruik genomen.",
 };
+
+/** Meldingen die eerder een waarschuwing zijn dan een mededeling. */
+const WARNINGS = new Set(["magic-link-ongeldig", "e-mail-link-ongeldig", "e-mail-bezet"]);
 
 export default async function LoginPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -37,7 +44,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
     >
       {notice ? (
         <Alert
-          variant={noticeKey === "magic-link-ongeldig" ? "warning" : "info"}
+          variant={noticeKey && WARNINGS.has(noticeKey) ? "warning" : "info"}
           title={notice}
           className="mb-4"
         />

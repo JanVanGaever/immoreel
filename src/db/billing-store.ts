@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { nextPeriod } from "@/lib/billing/changes";
+import { isSeedEnabled, seedInvoices, seedSubscription } from "@/db/seed";
 import { describeInvoice, invoiceNumber } from "@/lib/billing/invoices";
-import { TRIAL_DAYS, getPlan, priceBreakdown } from "@/lib/billing/plans";
+import { TRIAL_DAYS, priceBreakdown } from "@/lib/billing/plans";
 import { DEFAULT_CURRENCY } from "@/lib/constants";
 import type {
   CheckoutAttempt,
@@ -93,6 +93,19 @@ export type BillingStore = {
     status: CheckoutAttemptStatus,
     failureReason?: string | null,
   ): Promise<CheckoutAttempt | null>;
+
+  /* --- Intern: over alle organisaties heen ------------------------------ */
+  /**
+   * Alleen voor het interne supportpaneel (`src/db/admin-store.ts`).
+   *
+   * Let op het verschil met `getSubscription()`: dat maakt een proefperiode aan
+   * voor wie er nog geen heeft, en dat hoort een supportpaneel nooit te doen.
+   * Deze geeft terug wat er staat, en niets meer — een kantoor zonder rij komt
+   * er dus niet in voor, en het paneel zegt dat ook zo.
+   */
+  listAllSubscriptions(): Promise<Subscription[]>;
+  listAllInvoices(): Promise<Invoice[]>;
+  listAllCheckouts(): Promise<CheckoutAttempt[]>;
 };
 
 declare global {
@@ -106,21 +119,41 @@ declare global {
 }
 
 function getData() {
-  globalThis.__immoreelBilling ??= {
+  globalThis.__immoreelBilling ??= seed({
     subscriptions: new Map(),
     invoices: new Map(),
     checkouts: new Map(),
-  };
+  });
 
   return globalThis.__immoreelBilling;
+}
+
+type BillingData = NonNullable<typeof globalThis.__immoreelBilling>;
+
+/**
+ * Het abonnement van het demokantoor met zijn betaalgeschiedenis
+ * (`src/db/seed/billing.ts`).
+ *
+ * Meteen bij het opzetten van de data, en niet pas wanneer iemand
+ * `getSubscription()` aanroept. Anders bestaat het abonnement wél op de
+ * facturatiepagina en niet in `listAllSubscriptions()`, en dat is precies het
+ * verschil waarop het adminpaneel zou struikelen: dat leest bewust nooit
+ * `getSubscription()`, om geen proefperiode aan te maken door te kijken.
+ */
+function seed(data: BillingData): BillingData {
+  if (!isSeedEnabled()) return data;
+
+  const subscription = seedSubscription();
+  data.subscriptions.set(subscription.organisationId, subscription);
+
+  for (const invoice of seedInvoices()) data.invoices.set(invoice.id, invoice);
+
+  return data;
 }
 
 function id(prefix: string): ID {
   return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
-
-/** De organisatie die bij het demoaccount hoort (zie `auth-store.ts`). */
-const DEMO_ORGANISATION_ID = "org_demo";
 
 /* -------------------------------------------------------------------------
  * Beginstand
@@ -148,58 +181,6 @@ function createTrial(organisationId: ID): Subscription {
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   };
-}
-
-/**
- * Het demokantoor betaalt al een half jaar, zodat de betaalgeschiedenis met
- * echte vormen te zien is. De data staat relatief aan "nu", anders veroudert
- * het scherm zichtbaar.
- */
-function seedDemo(organisationId: ID): Subscription {
-  const now = new Date();
-  const period = nextPeriod(new Date(now.getFullYear(), now.getMonth(), 1));
-
-  const subscription: Subscription = {
-    id: id("sub"),
-    organisationId,
-    planId: "kantoor",
-    status: "actief",
-    currentPeriodStart: period.start,
-    currentPeriodEnd: period.end,
-    cancelAtPeriodEnd: false,
-    trialEndsAt: null,
-    pendingPlanId: null,
-    paymentMethod: "bancontact",
-    mollieCustomerId: "cst_demo",
-    mollieSubscriptionId: "sub_demo",
-    mollieMandateId: "mdt_demo",
-    createdAt: new Date(now.getTime() - 190 * 86_400_000).toISOString(),
-    updatedAt: now.toISOString(),
-  };
-
-  const data = getData();
-
-  for (let monthsAgo = 5; monthsAgo >= 0; monthsAgo -= 1) {
-    const paidAt = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1, 6, 12);
-    const covered = nextPeriod(paidAt);
-    const purpose: PaymentPurpose = monthsAgo === 5 ? "start" : "verlenging";
-    const invoice = buildInvoice({
-      organisationId,
-      molliePaymentId: `tr_demo${monthsAgo}`,
-      status: "betaald",
-      purpose,
-      planId: "kantoor",
-      subtotalInCents: getPlan("kantoor").pricePerMonthInCents,
-      method: "bancontact",
-      periodStart: covered.start,
-      periodEnd: covered.end,
-      paidAt: paidAt.toISOString(),
-    }, invoiceNumber(paidAt.getFullYear(), 6 - monthsAgo));
-
-    data.invoices.set(invoice.id, invoice);
-  }
-
-  return subscription;
 }
 
 /* -------------------------------------------------------------------------
@@ -253,10 +234,9 @@ const memoryStore: BillingStore = {
     const existing = getData().subscriptions.get(organisationId);
     if (existing) return existing;
 
-    const subscription =
-      organisationId === DEMO_ORGANISATION_ID && process.env.NODE_ENV !== "production"
-        ? seedDemo(organisationId)
-        : createTrial(organisationId);
+    // Het demokantoor staat er al vanaf de seed; wie hier belandt is een
+    // organisatie zonder abonnement, en die begint aan haar proefperiode.
+    const subscription = createTrial(organisationId);
 
     getData().subscriptions.set(organisationId, subscription);
 
@@ -388,6 +368,22 @@ const memoryStore: BillingStore = {
     getData().checkouts.set(molliePaymentId, updated);
 
     return updated;
+  },
+
+  async listAllSubscriptions() {
+    return [...getData().subscriptions.values()];
+  },
+
+  async listAllInvoices() {
+    return [...getData().invoices.values()].sort((a, b) =>
+      (b.paidAt ?? b.createdAt).localeCompare(a.paidAt ?? a.createdAt),
+    );
+  },
+
+  async listAllCheckouts() {
+    return [...getData().checkouts.values()].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    );
   },
 };
 

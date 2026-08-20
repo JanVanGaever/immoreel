@@ -15,10 +15,19 @@ import type { ID } from "@/types";
  * zo breed als een van één. Dat is de enige plek waar de verhouding tussen de
  * scènes in één oogopslag klopt.
  *
+ * Die schaal heeft één ondergrens nodig. Twintig scènes op een telefoon van
+ * 375 pixels maakt blokken van zestien pixels breed: niet te lezen en niet aan
+ * te tikken. De baan krijgt daarom een minimumbreedte die met het aantal
+ * scènes meegroeit en schuift horizontaal zodra ze niet meer past. De
+ * verhoudingen blijven kloppen — ze staan alleen op een bredere baan.
+ *
  * De blokken zitten in een gememoiseerde component: de afspeelkop beweegt
  * zestig keer per seconde, en dan hoeven veertig blokken niet mee te
  * hertekenen.
  */
+
+/** Onder deze breedte is een blok niet meer te lezen of aan te tikken. */
+const MIN_SEGMENT_WIDTH_PX = 44;
 
 export type TimelineProps = {
   timeline: TimelineModel;
@@ -63,23 +72,28 @@ export function Timeline({
         </span>
       </div>
 
-      <div
-        onClick={handleTrackClick}
-        className="relative h-16 w-full cursor-crosshair overflow-hidden rounded-lg bg-surface-inset"
-      >
-        <TimelineTrack
-          segments={timeline.segments}
-          duration={duration}
-          activeSceneId={activeSceneId}
-          selectedSceneIds={selectedSceneIds}
-          onSelectScene={onSelectScene}
-        />
+      {/* De baan schuift binnen deze strook; de klik om te verspringen zit op
+          de baan zelf, zodat een verschoven strook de positie niet verlegt. */}
+      <div className="scroll-x rounded-lg bg-surface-inset">
+        <div
+          onClick={handleTrackClick}
+          style={{ minWidth: `${timeline.segments.length * MIN_SEGMENT_WIDTH_PX}px` }}
+          className="relative h-16 w-full cursor-crosshair overflow-hidden rounded-lg"
+        >
+          <TimelineTrack
+            segments={timeline.segments}
+            duration={duration}
+            activeSceneId={activeSceneId}
+            selectedSceneIds={selectedSceneIds}
+            onSelectScene={onSelectScene}
+          />
 
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 w-0.5 bg-brand"
-          style={{ left: `${Math.min((time / duration) * 100, 100)}%` }}
-        />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 w-0.5 bg-brand"
+            style={{ left: `${Math.min((time / duration) * 100, 100)}%` }}
+          />
+        </div>
       </div>
     </div>
   );

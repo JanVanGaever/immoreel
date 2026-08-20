@@ -6,6 +6,7 @@ import { Alert } from "@/components/ui/alert";
 import { buttonClasses } from "@/components/ui/button";
 import { AUTH_ROUTES } from "@/lib/auth/config";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/auth/roles";
+import { getSession } from "@/lib/auth/session";
 import { describeInvitation } from "@/lib/team/lookup";
 import { firstSearchParam } from "@/lib/utils";
 import { InviteForm } from "./invite-form";
@@ -28,7 +29,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
  */
 export default async function InvitePage({ searchParams }: { searchParams: SearchParams }) {
   const token = firstSearchParam((await searchParams).token);
-  const invitation = await describeInvitation(token);
+  const [invitation, session] = await Promise.all([describeInvitation(token), getSession()]);
 
   if (invitation.status === "onbruikbaar") {
     return (
@@ -88,6 +89,17 @@ export default async function InvitePage({ searchParams }: { searchParams: Searc
         </>
       }
     >
+      {session ? (
+        <Alert
+          variant="warning"
+          title={`Je bent nu ingelogd als ${session.user.name}.`}
+          className="mb-5"
+        >
+          Deze uitnodiging maakt een nieuw account aan. Aanvaard je ze, dan werk je verder in{" "}
+          {invitation.organisationName} en niet meer in {session.organisation.name}.
+        </Alert>
+      ) : null}
+
       <div className="mb-5 flex items-start gap-3 rounded-lg border border-border bg-surface-subtle px-3.5 py-3">
         <RoleBadge role={invitation.role} className="mt-0.5" />
         <p className="text-sm text-fg-muted">

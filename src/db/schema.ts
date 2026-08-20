@@ -5,12 +5,14 @@ import type {
   Invitation,
   Invoice,
   MediaAsset,
+  ProjectAsset,
   Membership,
   Organisation,
   Property,
   RenderJob,
   Subscription,
   Template,
+  UserPreferences,
   UserRecord,
   VideoProject,
 } from "@/types";
@@ -26,9 +28,11 @@ export const tables = {
   brandKits: "brand_kits",
   checkoutAttempts: "checkout_attempts",
   memberships: "memberships",
+  userPreferences: "user_preferences",
   invitations: "invitations",
   properties: "properties",
   mediaAssets: "media_assets",
+  projectAssets: "project_assets",
   templates: "templates",
   videoProjects: "video_projects",
   renderJobs: "render_jobs",
@@ -45,9 +49,11 @@ export type Rows = {
   brand_kits: BrandKit;
   checkout_attempts: CheckoutAttempt;
   memberships: Membership;
+  user_preferences: UserPreferences;
   invitations: Invitation;
   properties: Property;
   media_assets: MediaAsset;
+  project_assets: ProjectAsset;
   templates: Template;
   video_projects: VideoProject;
   render_jobs: RenderJob;

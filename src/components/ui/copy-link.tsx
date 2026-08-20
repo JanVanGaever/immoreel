@@ -4,21 +4,23 @@ import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export type InviteLinkProps = {
+export type CopyLinkProps = {
   url: string;
   className?: string;
 };
 
 /**
- * De uitnodigingslink om zelf door te sturen.
+ * Een link die op het scherm staat om zelf door te sturen, met een
+ * kopieerknop ernaast.
  *
- * Ze staat er niet als noodoplossing voor de ontbrekende e-mailprovider
- * alleen: een mail die in de spam belandt is de gewoonste zaak, en dan is
- * "plak deze link in WhatsApp" sneller dan opnieuw versturen. Van het token
- * bewaren we enkel de hash, dus deze link is hierna nergens meer op te vragen
- * — daarom staat ze meteen na het uitnodigen op het scherm.
+ * Gebruikt voor uitnodigingen en voor het bevestigen van een nieuw
+ * e-mailadres. Van zulke tokens bewaren we alleen de hash, dus de link is
+ * hierna nergens meer op te vragen — daarom staat ze meteen na het aanvragen
+ * op het scherm. Dat is geen noodoplossing voor de ontbrekende
+ * e-mailprovider alleen: een mail die in de spam belandt is de gewoonste zaak,
+ * en dan is "plak deze link in WhatsApp" sneller dan opnieuw versturen.
  */
-export function InviteLink({ url, className }: InviteLinkProps) {
+export function CopyLink({ url, className }: CopyLinkProps) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {

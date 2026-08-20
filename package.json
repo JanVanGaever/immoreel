@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "worker": "tsx src/workers/main.ts",
+    "seed": "tsx scripts/seed.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

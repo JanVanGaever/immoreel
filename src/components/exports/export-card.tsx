@@ -2,13 +2,14 @@
 
 import { Download, Film, RotateCcw } from "lucide-react";
 import { ExportStatusBadge } from "@/components/exports/export-status-badge";
-import { Alert } from "@/components/ui/alert";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorAlert } from "@/components/ui/error-state";
 import { Meter } from "@/components/ui/meter";
 import { aspectRatioCss } from "@/lib/aspect-ratios";
 import { API_ROUTES } from "@/lib/constants";
 import { formatBytes, formatDateTime, formatDuration } from "@/lib/format";
+import { toRenderErrorShape } from "@/lib/render/errors";
 import type { ExportResult } from "@/lib/exports";
 import { cn } from "@/lib/utils";
 import type { ID } from "@/types";
@@ -71,12 +72,17 @@ export function ExportCard({
             />
           ) : null}
 
+          {/* De fout van de renderjob in dezelfde vorm als elders in de app.
+              De knop staat hieronder bij de andere acties en niet in dit blok:
+              op deze kaart is "Opnieuw insturen" een van de dingen die je met
+              een export kan doen, naast downloaden. */}
           {hasFailed && result.error ? (
-            <Alert variant="danger" title={result.error.message}>
-              {result.error.retryable
-                ? "Dit lukt vaak wel bij een tweede poging."
-                : "Een tweede poging geeft waarschijnlijk dezelfde fout. Pas eerst iets aan in de editor."}
-            </Alert>
+            <ErrorAlert
+              error={toRenderErrorShape(result.error, {
+                jobId: result.jobId,
+                at: result.finishedAt ?? result.queuedAt,
+              })}
+            />
           ) : null}
 
           <ExportMetadata result={result} />

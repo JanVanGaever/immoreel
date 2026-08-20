@@ -14,6 +14,12 @@ export const PASSWORD_RESET_TTL_SECONDS = 60 * 60;
 /** Magic link: nog korter, want de link logt meteen in. */
 export const MAGIC_LINK_TTL_SECONDS = 60 * 15;
 
+/**
+ * Bevestiging van een nieuw e-mailadres: één uur, net als een herstellink.
+ * Wie het adres wijzigt, zit op dat moment achter zijn mailbox.
+ */
+export const EMAIL_CHANGE_TTL_SECONDS = 60 * 60;
+
 export const AUTH_ROUTES = {
   login: "/login",
   signup: "/signup",
@@ -22,6 +28,8 @@ export const AUTH_ROUTES = {
   magicLink: "/magic-link",
   /** De uitnodiging van een collega: account aanmaken binnen een bestaand kantoor. */
   invite: "/invite",
+  /** Route handler: het nieuwe e-mailadres bevestigen vanuit de mail. */
+  emailChange: "/email-change",
 } as const;
 
 /** Routes die zonder sessie bereikbaar zijn. */

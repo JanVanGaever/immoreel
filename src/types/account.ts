@@ -38,8 +38,11 @@ export type Membership = {
   role: Role;
 } & Timestamps;
 
-/** Eenmalige tokens uit een e-mail: wachtwoordherstel en magic link. */
-export type AuthTokenPurpose = "password-reset" | "magic-link";
+/**
+ * Eenmalige tokens uit een e-mail: wachtwoordherstel, magic link en het
+ * bevestigen van een nieuw e-mailadres.
+ */
+export type AuthTokenPurpose = "password-reset" | "magic-link" | "email-change";
 
 export type AuthToken = {
   id: ID;
@@ -47,6 +50,12 @@ export type AuthToken = {
   purpose: AuthTokenPurpose;
   /** Alleen de SHA-256 van het token; de klare tekst staat enkel in de e-mail. */
   tokenHash: string;
+  /**
+   * Het nieuwe e-mailadres bij `email-change`. Het staat hier en niet al op de
+   * gebruiker: pas wie op de link in díé mailbox klikt, bewijst dat het adres
+   * van hem is.
+   */
+  email?: string | null;
   expiresAt: string;
   usedAt?: string | null;
 } & Timestamps;
@@ -96,5 +105,49 @@ export type InvitationSummary = {
   /** Naam van wie uitnodigde; `null` als die collega intussen weg is. */
   invitedByName: string | null;
   createdAt: string;
+  expiresAt: string;
+};
+
+/**
+ * De taal waarin een gebruiker wil werken. Belgisch: Nederlands en Frans,
+ * met Engels erbij voor internationale collega's.
+ */
+export type Locale = "nl-BE" | "fr-BE" | "en";
+
+/**
+ * Waarover we een gebruiker mogen mailen. Bewust per onderwerp en niet één
+ * schakelaar: wie zijn renders wil opvolgen, wil daarom nog geen productnieuws.
+ */
+export type NotificationPreferences = {
+  /** Een video is klaar en staat klaar om te downloaden. */
+  renderKlaar: boolean;
+  /** Een render of export is mislukt. */
+  renderMislukt: boolean;
+  /** Iemand komt erbij, krijgt een andere rol of gaat weg. */
+  teamWijzigingen: boolean;
+  /** Facturen, mislukte betalingen en het einde van de proefperiode. */
+  facturatie: boolean;
+  /** Nieuwe templates en functies. */
+  productnieuws: boolean;
+};
+
+/** De persoonlijke instellingen van één gebruiker, los van zijn kantoor. */
+export type UserPreferences = {
+  userId: ID;
+  locale: Locale;
+  notifications: NotificationPreferences;
+} & Timestamps;
+
+export type UserPreferencesInput = {
+  locale: Locale;
+  notifications: NotificationPreferences;
+};
+
+/**
+ * Een e-mailwijziging die nog bevestigd moet worden op het nieuwe adres.
+ * Zonder token: dat staat alleen in de link.
+ */
+export type PendingEmailChange = {
+  email: string;
   expiresAt: string;
 };

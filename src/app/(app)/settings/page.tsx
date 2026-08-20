@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Palette, Users } from "lucide-react";
+import { Palette, UserRound, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Alert } from "@/components/ui/alert";
+import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
 import {
@@ -15,8 +16,14 @@ import {
 } from "@/components/ui/card";
 import { FormField } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { getAccountStore } from "@/db/account-store";
 import { getBrandKitStore } from "@/db/brand-kit-store";
 import { getTeamStore } from "@/db/team-store";
+import {
+  NOTIFICATION_ITEMS,
+  countEnabledNotifications,
+  findLocale,
+} from "@/lib/account/preferences";
 import { ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS, can } from "@/lib/auth/roles";
 import { requireSession } from "@/lib/auth/session";
 import { findFont } from "@/lib/brand/fonts";
@@ -29,11 +36,13 @@ export default async function SettingsPage() {
   const mayManageOrganisation = can(role, "organisation:manage");
   const mayManageMembers = can(role, "members:manage");
 
-  const [brandKit, members] = await Promise.all([
+  const [brandKit, members, preferences] = await Promise.all([
     getBrandKitStore().getBrandKit(organisation.id),
     getTeamStore().listMembers(organisation.id),
+    getAccountStore().getPreferences(user.id),
   ]);
   const memberCount = members.length;
+  const enabledNotifications = countEnabledNotifications(preferences.notifications);
 
   return (
     <>
@@ -75,7 +84,10 @@ export default async function SettingsPage() {
           </CardFooter>
         </Card>
 
-        <Card>
+        {/* Samenvatting, geen formulier: alles wat je aan je account kan
+            veranderen — en wat er bevestiging bij nodig heeft — staat op een
+            eigen pagina met tabbladen. */}
+        <Card id="account">
           <CardHeader>
             <div>
               <CardTitle>Jouw account</CardTitle>
@@ -83,15 +95,32 @@ export default async function SettingsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FormField label="Naam">
-              <Input defaultValue={user.name} />
-            </FormField>
-            <FormField label="E-mailadres" hint="Hiermee log je in.">
-              <Input defaultValue={user.email} type="email" disabled />
-            </FormField>
+            <div className="flex items-center gap-3">
+              <Avatar name={user.name} src={user.avatarUrl} />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-fg">{user.name}</p>
+                <p className="mt-0.5 truncate text-xs text-fg-subtle">{user.email}</p>
+              </div>
+              <Badge variant="brand" size="sm" className="ml-auto shrink-0">
+                {ROLE_LABELS[role]}
+              </Badge>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="neutral" size="sm">
+                Taal: {findLocale(preferences.locale).label}
+              </Badge>
+              <Badge variant="neutral" size="sm">
+                {enabledNotifications} van de {NOTIFICATION_ITEMS.length} meldingen aan
+              </Badge>
+            </div>
           </CardContent>
           <CardFooter>
-            <Button disabled>Opslaan</Button>
+            <Link href={ROUTES.account} className={buttonClasses("secondary", "md")}>
+              <UserRound />
+              Account beheren
+            </Link>
+            <span className="text-xs text-fg-subtle">Naam, e-mailadres en wachtwoord</span>
           </CardFooter>
         </Card>
 

@@ -18,8 +18,17 @@ import {
   subscribeToStoredDraft,
   writeStoredDraft,
 } from "@/lib/new-project/draft-storage";
-import { MAX_PHOTOS, rejectionReason } from "@/lib/new-project/validation";
-import type { AspectRatio, DraftPhoto, ID, ProjectDraft, ProjectGoal, Template } from "@/types";
+import { MAX_PHOTOS } from "@/lib/new-project/validation";
+import { rejectionFor } from "@/lib/uploads/validation";
+import type {
+  AspectRatio,
+  DraftPhoto,
+  ID,
+  ProjectDraft,
+  ProjectGoal,
+  Template,
+  UploadRejection,
+} from "@/types";
 
 /** Hoe lang we wachten met bewaren nadat het typen stopt. */
 const AUTOSAVE_DELAY_MS = 500;
@@ -27,7 +36,12 @@ const AUTOSAVE_DELAY_MS = 500;
 /** Op de server is er geen opslag; daar bestaat er dus ook geen concept. */
 const serverSnapshot = () => null;
 
-export type PhotoRejection = { fileName: string; reason: string };
+/**
+ * Dezelfde vorm als bij de uploadlijst, met de foutcode erbij. Stond hier eerst
+ * als eigen type; dat betekende dat een bestand dat de wizard weigerde en
+ * hetzelfde bestand dat de uploader weigerde, twee verschillende dingen waren.
+ */
+export type PhotoRejection = UploadRejection;
 
 export type AddPhotosResult = { added: number; rejected: PhotoRejection[] };
 
@@ -192,9 +206,9 @@ export function useProjectDraft(templates: Template[]): ProjectDraftController {
       const accepted: File[] = [];
 
       for (const file of files) {
-        const reason = rejectionReason(file);
-        if (reason) {
-          rejected.push({ fileName: file.name, reason });
+        const rejection = rejectionFor(file);
+        if (rejection) {
+          rejected.push(rejection);
           continue;
         }
         accepted.push(file);
@@ -207,7 +221,11 @@ export function useProjectDraft(templates: Template[]): ProjectDraftController {
         const fits = accepted.slice(0, room);
 
         for (const file of accepted.slice(room)) {
-          rejected.push({ fileName: file.name, reason: `Meer dan ${MAX_PHOTOS} foto's.` });
+          rejected.push({
+            fileName: file.name,
+            code: "upload-rejected",
+            reason: `Meer dan ${MAX_PHOTOS} foto's.`,
+          });
         }
 
         if (fits.length === 0) return current;
