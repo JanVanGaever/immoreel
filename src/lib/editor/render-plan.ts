@@ -33,6 +33,8 @@ export type ScenePlan = {
 
 export type RenderPlan = {
   presetId: ID;
+  /** Titel van het project; komt op de introkaart terecht. */
+  title: string;
   width: number;
   height: number;
   fps: number;
@@ -86,6 +88,7 @@ export function buildRenderPlan(document: EditorDocument, preset: ExportPreset):
 
   return {
     presetId: preset.id,
+    title: document.title.trim(),
     width: preset.width,
     height: preset.height,
     fps: preset.fps,

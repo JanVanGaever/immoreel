@@ -3,8 +3,10 @@
 SaaS voor Belgische vastgoedkantoren: van foto's van een pand naar een
 afgewerkte vastgoedvideo.
 
-Deze repo bevat momenteel **alleen de structuur en het design system** — nog
-geen business logic, geen database en geen renderpijplijn.
+De weg van foto naar video staat er: aanmelden, wizard, editor, wachtrij en de
+FFmpeg-renderservice. Wat er nog **niet** is, is een databank — de stores
+draaien in het geheugen van het proces — en object storage voor de foto's en de
+afgewerkte video's.
 
 ## Starten
 
@@ -214,19 +216,59 @@ alles opnieuw: wat fout is wordt geweigerd, wat alleen buiten de grenzen valt
 wordt rechtgetrokken (een scène van 400 seconden hoort geen autosave te laten
 mislukken).
 
-### Beweging: de preview ís de render
+### Beweging per foto
 
-`lib/editor/motion.ts` zet een `SceneMotion` om in een begin- en eindkader.
-Dezelfde kaders worden:
+Elke foto heeft haar eigen `SceneMotion`: **soort, sterkte, tempo, versnelling
+en focuspunt**. De module staat in `lib/editor/motion.ts` (het rekenwerk) en
+`components/editor/motion/` (de schermen), en werkt op losse waarden in plaats
+van op de editorcontroller — dezelfde module past dus straks ook op een sjabloon
+of in de mediabibliotheek.
 
-- een CSS-transform voor de preview (`motionStyleAt`), en
-- een FFmpeg-`zoompan`-expressie voor de renderpijplijn (`toZoompanFilter`).
+**Tien presets, en daarna zelf afstellen.** Geen · zoom in · zoom uit · pan
+links/rechts/omhoog/omlaag · Ken Burns · slow zoom · slow pan. Een preset is
+niets meer dan een `SceneMotion` met een naam, dus na het kiezen blijft elke
+waarde los bijstelbaar; wijkt de afstelling af, dan staat er "Aangepast" in
+plaats van een preset die niet klopt. Slow zoom en slow pan zijn daarom geen
+aparte soorten beweging maar een andere afstelling: een groot traject op een
+laag tempo. De templates wijzen zelf ook presets aan (`presetMotion()`), zodat
+er één woordenschat is in plaats van twee.
+
+**Sterkte en tempo zijn niet hetzelfde.** Sterkte is hoe ver de camera zou
+reizen (0 tot 1, maximaal 40 % vergroting). Tempo is hoeveel van die reis binnen
+deze scène past: onder 1 maakt de beweging haar traject niet af — dat is wat een
+slow zoom traag maakt — en boven 1 is ze vroeger klaar en staat het beeld daarna
+stil. Beide regelaars zeggen in gewone taal wat ze doen, want in cijfers lijken
+ze op elkaar.
+
+**Zien wat je instelt.** Naast elke instelling loopt een mini-preview met de
+foto zelf, en elke preset tekent haar eigen traject: waar de uitsnede begint
+(streepjes), waar ze eindigt (volle lijn) en de weg ertussen. Diezelfde
+tekening staat op elke rij in de fotolijst, zodat je van veertien foto's in één
+blik ziet welke kant ze op bewegen. Wie `prefers-reduced-motion` aan heeft, ziet
+een stilstaand eindbeeld met een knop om het één keer af te spelen.
+
+**Waarom de preview klopt.** `motionFrames()` zegt waar de camera begint en
+eindigt, `motionPhase()` wanneer ze onderweg is. Alles daarna leest die twee:
+
+- `motionStyleAt()` — een CSS-transform voor de preview,
+- `motionRectAt()` — de uitsnede voor de tekeningen,
+- `toZoompanFilter()` — de FFmpeg-`zoompan`-expressie voor de render.
 
 `transform-origin` in procenten schaalt rond precies het punt waar `zoompan`
-zijn uitsnede legt, dus wat de makelaar ziet kan niet uit de pas lopen met wat
-er gerenderd wordt. De filterstring staat per scène onder "Renderinstructie" in
-het rechterpaneel. De renderworker gebruikt hem nog niet — die bestaat nog niet
-(zie `src/workers/`) — maar dit is wat de instelling straks letterlijk wordt.
+zijn uitsnede legt, en de versnellingscurve staat in beide vormen (smoothstep in
+JavaScript, dezelfde smoothstep als expressie). De filterstring staat per scène
+onder "Renderinstructie" in het rechterpaneel — bij tempo 2 zie je er letterlijk
+de `min(…,1)` in staan die het stilstaan aan het einde doet. Dat is niet ter
+illustratie: `buildRenderPlan()` in `lib/editor/render-plan.ts` maakt er het
+plan per foto van (frames, overgangen, filter) en de renderworker zet exact
+diezelfde expressie op de opdrachtregel van FFmpeg. Als een instelling niet in
+een filterstring te vatten is, is ze een knop zonder betekenis — dat is de test.
+
+**Bewaard per foto.** De beweging hangt aan de scène, en een scène ís één foto;
+`motionByAssetId()` geeft de configuratie op asset-id voor de pijplijn.
+Alles komt binnen via `normaliseMotion()`, de enige plek waar een `SceneMotion`
+ontstaat: die klemt elke waarde en leest ook oudere projecten (waarin de sterkte
+nog "subtiel" of "sterk" heette).
 
 De afspeelkop (`usePlayback`) woont in het middenpaneel en nergens anders: hij
 beweegt zestig keer per seconde, en zo hertekenen links en rechts niet mee. Wie
@@ -265,12 +307,32 @@ bitrate en de grenzen van elk platform).
 De exportknop toont per platform het formaat en een schatting van de
 bestandsgrootte, plus wat er misgaat: een afwijkende beeldverhouding is een
 waarschuwing (er wordt bijgesneden), een lengte die het platform weigert houdt
-de export tegen. `exportProjectAction` controleert rechten en presets opnieuw en
-zet het project op `wachtrij`. Er wordt nog niets gerenderd: zodra `getQueue()`
-werkt, is dat één `enqueue` per preset.
+de export tegen. `exportProjectAction` controleert rechten en presets opnieuw,
+zet het project op `wachtrij` en stuurt één job per preset de wachtrij in.
 
 > De editor mag geen beelden genereren. Hij configureert alleen: wat je instelt,
 > is een instructie voor de renderpijplijn.
+
+## Renderen
+
+De export gaat via Redis en BullMQ naar een los workerproces, dat er met FFmpeg
+een MP4 van maakt: per foto een `zoompan`-clip, daarna de clips aan elkaar met
+de overgangen en de muziek eronder. De volledige uitleg — de opbouw van de
+filters, de encoderinstellingen per platform, wat er per omgeving ingesteld moet
+worden — staat in [`src/workers/README.md`](src/workers/README.md).
+
+Twee dingen die de rest verklaren:
+
+- **De beweging bestaat maar op één plek.** De worker gebruikt dezelfde
+  `toZoompanFilter()` als de preview, dus wat de makelaar ziet, is wat er
+  gerenderd wordt.
+- **Er wordt niets gegenereerd.** De video is de geüploade foto's plus de
+  ingestelde parameters, en niets anders. Dezelfde invoer geeft twee keer
+  dezelfde video — daar hangt ook de idempotentie van de wachtrij aan vast.
+
+Zonder `RENDER_BACKEND=ffmpeg` draait de nepbackend: die doorloopt de hele
+pijplijn met voortgang en statussen, maar rendert niets. Zo is het scherm te
+gebruiken zonder dat FFmpeg geïnstalleerd staat.
 
 ## Design system
 
@@ -321,5 +383,7 @@ en `Modal` gebruikt het native `<dialog>` voor focus-trap en Escape.
 - **Nieuw paneel in de editor**: component in `src/components/editor/panels/`,
   de bijbehorende actie in `src/lib/editor/state.ts` en een `PanelSection` in
   `settings-panel.tsx`. Autosave volgt vanzelf.
-- **Nieuwe beweging of exportpreset**: `src/lib/editor/motion.ts` (met haar
-  `zoompan`-vertaling) of `src/lib/editor/export-presets.ts`.
+- **Nieuwe beweging**: een soort erbij in `MOTION_OPTIONS` + `motionFrames()`
+  (beide in `src/lib/editor/motion.ts`, mét haar `zoompan`-vertaling), of enkel
+  een nieuwe afstelling in `MOTION_PRESETS`. Een exportpreset komt in
+  `src/lib/editor/export-presets.ts`.

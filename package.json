@@ -7,11 +7,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "worker": "tsx src/workers/main.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "bullmq": "^6.1.2",
     "clsx": "^2.1.1",
+    "ioredis": "^6.0.0",
     "lucide-react": "^1.32.0",
     "next": "^16.3.1",
     "react": "^19.2.8",
@@ -26,6 +29,7 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.1",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.3"
   }
 }

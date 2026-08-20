@@ -26,6 +26,7 @@ import type {
   AspectRatio,
   AudioSettings,
   BrandingSettings,
+  ExportPlatform,
   ID,
   SceneMotion,
   Template,
@@ -79,6 +80,10 @@ export type EditorController = {
   updateBranding: (changes: Partial<BrandingSettings>) => void;
   updateAudio: (changes: Partial<AudioSettings>) => void;
   toggleExportPreset: (presetId: ID) => void;
+  /** Alle formaten van één platform tegelijk aan- of uitzetten. */
+  toggleExportPlatform: (platform: ExportPlatform, on: boolean) => void;
+  /** De hele exportselectie vervangen; gebruikt door de snelkeuzes. */
+  setExportPresets: (presetIds: ID[]) => void;
 
   selectScene: (sceneId: ID, mode?: SelectMode) => void;
   selectAll: () => void;
@@ -195,6 +200,9 @@ export function useEditor({
     updateBranding: (changes) => dispatch({ type: "branding-gewijzigd", changes }),
     updateAudio: (changes) => dispatch({ type: "audio-gewijzigd", changes }),
     toggleExportPreset: (presetId) => dispatch({ type: "exportpreset-getoggeld", presetId }),
+    toggleExportPlatform: (platform, on) =>
+      dispatch({ type: "exportplatform-getoggeld", platform, on }),
+    setExportPresets: (presetIds) => dispatch({ type: "exportpresets-gezet", presetIds }),
 
     selectScene: (sceneId, mode = "vervang") =>
       dispatch({ type: "scene-geselecteerd", sceneId, mode }),

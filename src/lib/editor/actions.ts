@@ -5,10 +5,14 @@ import { getProjectStore } from "@/db/project-store";
 import { getTemplateStore } from "@/db/template-store";
 import { assertPermission } from "@/lib/auth/session";
 import type { ExportRequest, ExportState, SaveState } from "@/lib/editor/action-state";
-import type { ProjectPatch } from "@/lib/editor/document";
-import { exportWarnings, findExportPreset } from "@/lib/editor/export-presets";
+import { toEditorDocument, type ProjectPatch } from "@/lib/editor/document";
+import { buildExportBatch, describeFormat } from "@/lib/editor/export-presets";
+import { buildRenderPlan } from "@/lib/editor/render-plan";
 import { hasErrors, sanitizePatch, validatePatch } from "@/lib/editor/validation";
 import { ROUTES } from "@/lib/constants";
+import { isQueueConfigured } from "@/workers/config";
+import { enqueueRenderJob } from "@/workers/queue";
+import { ensureInlineRenderWorker } from "@/workers/inline";
 import type { ID } from "@/types";
 
 /**
@@ -55,20 +59,29 @@ export async function saveProjectAction(projectId: ID, patch: ProjectPatch): Pro
   };
 }
 
+
 /**
  * Een export aanvragen.
  *
- * Er wordt hier niets gerenderd: de wachtrij en de renderworker bestaan nog
- * niet (zie `src/workers/`). Wat er wél gebeurt, is alles eromheen — rechten,
- * presets nakijken, blokkerende waarschuwingen tegenhouden en de status van
- * het project op `wachtrij` zetten. Zodra `getQueue()` werkt, is dit één
- * `enqueue`-regel per preset.
+ * Per gekozen platform wordt hier één renderjob ingestuurd. Er wordt niets
+ * gerenderd in dit verzoek: de actie bouwt het renderplan, laat de wachtrij
+ * weten wat er moet gebeuren en geeft de jobids terug waarmee de editor de
+ * voortgang volgt.
+ *
+ * Twee keer op de knop duwen levert geen twee renders op. De id van een job
+ * volgt uit project, preset en renderplan (`src/lib/render/fingerprint.ts`),
+ * dus de tweede opdracht is letterlijk dezelfde als de eerste en wordt door
+ * BullMQ genegeerd.
  */
-export async function exportProjectAction(
-  projectId: ID,
-  presetIds: ID[],
-): Promise<ExportState> {
-  const { organisation } = await assertPermission("project:edit");
+export async function exportProjectAction(projectId: ID, presetIds: ID[]): Promise<ExportState> {
+  const { organisation, user } = await assertPermission("project:edit");
+
+  if (!isQueueConfigured()) {
+    return {
+      status: "fout",
+      message: "De renderwachtrij is niet geconfigureerd. Zet REDIS_URL en start de worker.",
+    };
+  }
 
   const project = await getProjectStore().findProject(organisation.id, projectId);
   if (!project) return { status: "fout", message: "Dit project bestaat niet meer." };
@@ -77,33 +90,53 @@ export async function exportProjectAction(
     return { status: "fout", message: "Kies minstens één platform om naar te exporteren." };
   }
 
-  const requests: ExportRequest[] = [];
+  const document = toEditorDocument(project);
 
-  for (const presetId of presetIds) {
-    const preset = findExportPreset(presetId);
-    if (!preset) continue;
+  // Dezelfde doorrekening als in de editor, maar op wat er nú op de server
+  // staat. De browser mag hier niet het laatste woord hebben: een tabblad dat
+  // een uur openstond, weet niet meer wat er intussen bewaard is.
+  const batch = buildExportBatch(presetIds, {
+    aspectRatio: project.aspectRatio,
+    durationInSeconds: project.durationInSeconds,
+    sceneCount: project.scenes.length,
+    title: project.title,
+  });
 
-    const blocking = exportWarnings(preset, project.aspectRatio, project.durationInSeconds).filter(
-      (warning) => warning.level === "blokkerend",
-    );
-
-    if (blocking.length > 0) {
-      return { status: "fout", message: blocking[0]!.message };
-    }
-
-    requests.push({
-      presetId: preset.id,
-      label: preset.label,
-      format: `${preset.width}x${preset.height} · ${preset.fps} fps`,
-    });
+  if (batch.blocking.length > 0) {
+    return { status: "fout", message: batch.blocking[0]!.message };
   }
 
-  if (requests.length === 0) {
+  if (batch.items.length === 0) {
     return { status: "fout", message: "Geen van de gekozen platformen bestaat nog." };
   }
 
-  // TODO: één `getQueue().enqueue("render.video", { projectId, requestedBy })`
-  // per preset zodra de wachtrij er is.
+  const requests: ExportRequest[] = [];
+
+  // Alleen bij ontwikkelen: dan draait de worker mee in dit proces.
+  ensureInlineRenderWorker();
+
+  for (const item of batch.items) {
+    const { job, reason } = await enqueueRenderJob({
+      organisationId: organisation.id,
+      projectId,
+      presetId: item.preset.id,
+      requestedBy: user.id,
+      plan: buildRenderPlan(document, item.preset),
+    });
+
+    requests.push({
+      jobId: job.id,
+      presetId: item.preset.id,
+      label: item.preset.label,
+      format: describeFormat(item.preset),
+      fileName: item.fileName,
+      isNew: reason === "new" || reason === "retried",
+    });
+  }
+
+  // De worker zet de status verder (`renderen`, `klaar`, `mislukt`); dit is
+  // alleen wat er nu al klopt, zodat de lijst niet achterloopt tot de eerste
+  // worker wakker wordt.
   await getProjectStore().setProjectStatus(organisation.id, projectId, "wachtrij");
 
   revalidatePath(ROUTES.projects);

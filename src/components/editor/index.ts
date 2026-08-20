@@ -20,6 +20,16 @@ export {
   usePrefersReducedMotion,
 } from "@/components/editor/motion";
 
+export {
+  PreviewControls,
+  PreviewDialog,
+  PreviewPlayer,
+  PreviewScreen,
+  PreviewSlides,
+  usePreviewPlan,
+  usePreviewPlayback,
+} from "@/components/editor/preview";
+
 export { AssetPanel } from "@/components/editor/panels/asset-panel";
 export { AssetRow } from "@/components/editor/panels/asset-row";
 export { AspectRatioSelector } from "@/components/editor/panels/aspect-ratio-selector";
@@ -27,8 +37,14 @@ export { AudioSelector } from "@/components/editor/panels/audio-selector";
 export { BrandingSelector } from "@/components/editor/panels/branding-selector";
 export { BulkEditBar } from "@/components/editor/panels/bulk-edit-bar";
 export { DurationSlider, DurationStepper } from "@/components/editor/panels/duration-field";
-export { ExportPresetList } from "@/components/editor/panels/export-selector";
+export {
+  ExportPresetList,
+  exportContext,
+  PLATFORM_ICONS,
+  useExportBatch,
+} from "@/components/editor/panels/export-selector";
 export { PreviewStage } from "@/components/editor/panels/preview-stage";
+export { SafeAreaFrame } from "@/components/editor/panels/safe-area-frame";
 export { SceneSettings } from "@/components/editor/panels/scene-settings";
 export { SettingsPanel } from "@/components/editor/panels/settings-panel";
 export { StagePanel } from "@/components/editor/panels/stage-panel";
@@ -47,6 +63,15 @@ export type {
   MotionSettingsProps,
   MotionThumbnailProps,
 } from "@/components/editor/motion";
+
+export type {
+  PreviewControlsProps,
+  PreviewPlanState,
+  PreviewPlayback,
+  PreviewPlayerProps,
+  PreviewScreenProps,
+  PreviewSlidesProps,
+} from "@/components/editor/preview";
 
 export type { AssetRowProps } from "@/components/editor/panels/asset-row";
 export type { PreviewStageProps } from "@/components/editor/panels/preview-stage";

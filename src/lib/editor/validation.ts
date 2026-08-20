@@ -1,6 +1,6 @@
 import { clampAudio } from "@/lib/editor/audio";
 import { clampSceneSeconds, MAX_SCENES, type ProjectPatch } from "@/lib/editor/document";
-import { isExportPresetId } from "@/lib/editor/export-presets";
+import { normaliseExportPresetIds } from "@/lib/editor/export-presets";
 import { normaliseMotion } from "@/lib/editor/motion";
 import { templatesForRatio } from "@/lib/new-project/draft";
 import { validateTitle } from "@/lib/new-project/validation";
@@ -69,7 +69,8 @@ export function sanitizePatch(patch: ProjectPatch): ProjectPatch {
     })),
     audio: clampAudio(patch.audio),
     // Een preset die niet (meer) bestaat, verdwijnt stil: de gebruiker heeft
-    // hem ooit gekozen, maar de catalogus is intussen de waarheid.
-    exportPresetIds: patch.exportPresetIds.filter(isExportPresetId),
+    // hem ooit gekozen, maar de catalogus is intussen de waarheid. Oude ids
+    // worden onderweg hun opvolger (zie `normaliseExportPresetIds`).
+    exportPresetIds: normaliseExportPresetIds(patch.exportPresetIds),
   };
 }

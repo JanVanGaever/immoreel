@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createAudio } from "@/lib/editor/audio";
 import { createBranding } from "@/lib/editor/branding";
 import type { ProjectPatch } from "@/lib/editor/document";
-import { isExportPresetId } from "@/lib/editor/export-presets";
+import { defaultPresetIdsForGoal } from "@/lib/editor/export-presets";
 import { templateStyle } from "@/lib/editor/templates";
 import { buildScenes, estimateDurationInSeconds } from "@/lib/new-project/draft";
 import type { ID, NewProjectInput, VideoProject } from "@/types";
@@ -72,9 +72,9 @@ const memoryStore: ProjectStore = {
       scenes,
       branding: createBranding(),
       audio: createAudio(),
-      // Het doel uit de wizard heeft dezelfde id als de exportpreset ervan,
-      // dus de editor stelt meteen de juiste export voor.
-      exportPresetIds: isExportPresetId(input.goal) ? [input.goal] : [],
+      // Het doel uit de wizard bepaalt welke export al aangevinkt staat, zodat
+      // de editor meteen het juiste bestand voorstelt.
+      exportPresetIds: defaultPresetIdsForGoal(input.goal),
       musicAssetId: null,
       voiceoverAssetId: null,
       posterUrl: null,

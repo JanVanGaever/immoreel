@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Film } from "lucide-react";
+import { ArrowLeft, Film, MonitorPlay } from "lucide-react";
 import { SaveIndicator } from "@/components/editor/save-indicator";
 import type { EditorController } from "@/components/editor/use-editor";
 import { Logo } from "@/components/layout/logo";
@@ -23,10 +23,12 @@ import type { ProjectStatus } from "@/types";
 export function EditorTopbar({
   editor,
   status,
+  onPreview,
   onExport,
 }: {
   editor: EditorController;
   status: ProjectStatus;
+  onPreview: () => void;
   onExport: () => void;
 }) {
   return (
@@ -61,6 +63,19 @@ export function EditorTopbar({
 
       <div className="ml-auto flex items-center gap-3">
         <SaveIndicator save={editor.save} />
+
+        {/* Eerst kijken, dan pas renderen: een export van twintig minuten is
+            een dure manier om te ontdekken dat een scène te lang staat. */}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onPreview}
+          disabled={editor.scenes.length === 0}
+        >
+          <MonitorPlay />
+          <span className="hidden sm:inline">Preview</span>
+        </Button>
+
         <Button size="sm" onClick={onExport} disabled={editor.scenes.length === 0}>
           <Film />
           Exporteren

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Download, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -48,7 +48,18 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               <CardDescription>Geschiedenis van deze video.</CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="text-sm text-fg-muted">Nog geen renders.</CardContent>
+          <CardContent className="space-y-3 text-sm text-fg-muted">
+            <p>
+              De voortgang van elke export en de afgewerkte bestanden staan op de downloadpagina.
+            </p>
+            <Link
+              href={ROUTES.projectExports(projectId)}
+              className={buttonClasses("secondary", "sm")}
+            >
+              <Download />
+              Downloads bekijken
+            </Link>
+          </CardContent>
         </Card>
       </div>
     </>

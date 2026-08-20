@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Images, MonitorPlay, SlidersHorizontal } from "lucide-react";
 import { EditorTopbar } from "@/components/editor/editor-topbar";
 import { ExportDialog } from "@/components/editor/export-dialog";
+import { PreviewDialog } from "@/components/editor/preview/preview-dialog";
 import { AssetPanel } from "@/components/editor/panels/asset-panel";
 import { SettingsPanel } from "@/components/editor/panels/settings-panel";
 import { StagePanel } from "@/components/editor/panels/stage-panel";
@@ -42,11 +43,17 @@ const PANES: { id: Pane; label: string; icon: typeof Images }[] = [
 export function EditorShell({ projectId, status, initialDocument, templates }: EditorShellProps) {
   const editor = useEditor({ projectId, initialDocument, templates });
   const [pane, setPane] = useState<Pane>("preview");
+  const [isPreviewing, setPreviewing] = useState(false);
   const [isExporting, setExporting] = useState(false);
 
   return (
     <>
-      <EditorTopbar editor={editor} status={status} onExport={() => setExporting(true)} />
+      <EditorTopbar
+        editor={editor}
+        status={status}
+        onPreview={() => setPreviewing(true)}
+        onExport={() => setExporting(true)}
+      />
 
       <div className="flex min-h-0 flex-1">
         <AssetPanel
@@ -95,6 +102,17 @@ export function EditorShell({ projectId, status, initialDocument, templates }: E
           );
         })}
       </nav>
+
+      <PreviewDialog
+        editor={editor}
+        open={isPreviewing}
+        onClose={() => setPreviewing(false)}
+        onExport={() => {
+          // Twee vensters tegelijk open is er één te veel.
+          setPreviewing(false);
+          setExporting(true);
+        }}
+      />
 
       <ExportDialog editor={editor} open={isExporting} onClose={() => setExporting(false)} />
     </>

@@ -22,10 +22,16 @@ export type SaveState =
     };
 
 export type ExportRequest = {
+  /** De renderjob in de wachtrij; hiermee volgt de editor de voortgang. */
+  jobId: ID;
   presetId: ID;
   label: string;
-  /** Wat de renderworker straks maakt, bijvoorbeeld `1080x1920 · 30 fps`. */
+  /** Wat de renderworker maakt, bijvoorbeeld `1080x1920 · 30 fps`. */
   format: string;
+  /** De naam waaronder dit bestand straks gedownload wordt. */
+  fileName: string;
+  /** `false` wanneer deze render al liep of al klaar was. */
+  isNew: boolean;
 };
 
 export type ExportState =

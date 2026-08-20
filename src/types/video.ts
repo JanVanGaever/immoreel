@@ -1,3 +1,4 @@
+import type { BrandFontId } from "@/types/brand";
 import type { ID, Timestamps } from "@/types/common";
 
 export type MediaKind = "image" | "video" | "audio" | "document";
@@ -93,21 +94,36 @@ export type Scene = {
 export type LogoPlacement = "geen" | "linksboven" | "rechtsboven" | "linksonder" | "rechtsonder";
 
 /**
- * De huisstijl zoals die over deze video ligt. De kit zelf (logo, kleuren,
- * lettertype) hoort bij de organisatie; hier staat alleen wat dit project
- * ervan gebruikt.
+ * De huisstijl zoals die over deze video ligt.
+ *
+ * De kit zelf (logo, kleuren, teksten, lettertype) hoort bij de organisatie en
+ * staat in `BrandKit`; hier staat alleen wat dit ene project daaraan verandert.
+ * Elk overrulebaar veld is daarom nullable: `null` betekent niet "leeg" maar
+ * "neem wat de huisstijl zegt". Zo werkt een nieuwe accentkleur in de
+ * instellingen meteen door in elk project dat er niet van afwijkt.
+ *
+ * `resolveBrand()` in `src/lib/brand/kit.ts` legt die twee over elkaar.
  */
 export type BrandingSettings = {
-  brandKitId: ID | null;
   logoPlacement: LogoPlacement;
-  /** Slotkaart met naam en telefoonnummer van de makelaar. */
+  /** Slotkaart met de contactgegevens van het kantoor. */
   showContactCard: boolean;
   /** Prijsblok over de eerste scène. */
   showPriceBadge: boolean;
-  /** Overschrijft de kleur van de kit; `null` betekent: neem die van de kit. */
+  /** Overschrijft `primaryColor` van de kit. */
   accentColor: string | null;
+  /** Overschrijft `secondaryColor` van de kit. */
+  secondaryColor: string | null;
+  /** Overschrijft de zin boven de contactgegevens op de eindkaart. */
+  outroText: string | null;
+  /** Overschrijft de oproep op de eindkaart. */
+  ctaText: string | null;
+  fontId: BrandFontId | null;
+  /** `null` = het watermerk staat zoals de huisstijl het standaard zet. */
+  showWatermark: boolean | null;
   agentName: string | null;
   agentPhone: string | null;
+  agentEmail: string | null;
 };
 
 export type AudioSettings = {
@@ -139,18 +155,7 @@ export type VideoProject = {
   durationInSeconds: number;
 } & Timestamps;
 
-export type RenderJobStatus = "wachtrij" | "bezig" | "geslaagd" | "mislukt" | "geannuleerd";
-
-export type RenderJob = {
-  id: ID;
-  projectId: ID;
-  status: RenderJobStatus;
-  progress: number;
-  outputUrl?: string | null;
-  errorMessage?: string | null;
-  startedAt?: string | null;
-  finishedAt?: string | null;
-} & Timestamps;
+/** Renderjobs staan in `src/types/render.ts`: die horen bij de wachtrij, niet bij de editor. */
 
 /** Een herbruikbare huisstijl-template (intro, outro, kleuren, lettertype). */
 export type Template = {

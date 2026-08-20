@@ -1,5 +1,6 @@
 import { clampAudio, createAudio } from "@/lib/editor/audio";
 import { createBranding } from "@/lib/editor/branding";
+import { normaliseExportPresetIds } from "@/lib/editor/export-presets";
 import { normaliseMotion } from "@/lib/editor/motion";
 import { getTransition, templateStyle, type TransitionId } from "@/lib/editor/templates";
 import type {
@@ -157,7 +158,9 @@ export function toEditorDocument(project: VideoProject): EditorDocument {
       })),
     branding: createBranding(project.branding),
     audio: clampAudio(createAudio(project.audio)),
-    exportPresetIds: [...(project.exportPresetIds ?? [])],
+    // Een project uit de databank kan nog ids van vóór de huidige catalogus
+    // bevatten; die worden hier hun opvolger in plaats van te verdwijnen.
+    exportPresetIds: normaliseExportPresetIds(project.exportPresetIds),
   };
 }
 

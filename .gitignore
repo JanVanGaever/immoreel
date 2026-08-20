@@ -4,6 +4,9 @@ out/
 build/
 coverage/
 
+# Werkmap en uitvoer van de renderworker (RENDER_WORK_DIR)
+.render/
+
 .env
 .env.local
 .env.*.local

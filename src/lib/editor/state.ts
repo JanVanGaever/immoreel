@@ -9,6 +9,11 @@ import {
   type SceneSource,
   type SceneSourceStatus,
 } from "@/lib/editor/document";
+import {
+  normaliseExportPresetIds,
+  setPlatformPresets,
+  togglePresetId,
+} from "@/lib/editor/export-presets";
 import { createMotion, normaliseMotion } from "@/lib/editor/motion";
 import { templateStyle, type TransitionId } from "@/lib/editor/templates";
 import { resolveTemplateId } from "@/lib/new-project/draft";
@@ -16,6 +21,7 @@ import type {
   AspectRatio,
   AudioSettings,
   BrandingSettings,
+  ExportPlatform,
   ID,
   SceneMotion,
   Template,
@@ -60,6 +66,10 @@ export type EditorAction =
   | { type: "branding-gewijzigd"; changes: Partial<BrandingSettings> }
   | { type: "audio-gewijzigd"; changes: Partial<AudioSettings> }
   | { type: "exportpreset-getoggeld"; presetId: ID }
+  /** Een heel platform in één keer aan- of uitzetten (alle formaten ervan). */
+  | { type: "exportplatform-getoggeld"; platform: ExportPlatform; on: boolean }
+  /** De hele selectie vervangen, bijvoorbeeld door "wat past bij dit project". */
+  | { type: "exportpresets-gezet"; presetIds: ID[] }
   | { type: "uploads-gesynchroniseerd"; assets: UploadAsset[] }
   | { type: "scene-geselecteerd"; sceneId: ID; mode: SelectMode }
   | { type: "selectie-gezet"; sceneIds: ID[] }
@@ -309,14 +319,24 @@ export function createEditorReducer(templates: Template[]): EditorReducer {
           audio: clampAudio({ ...state.document.audio, ...action.changes }),
         });
 
-      case "exportpreset-getoggeld": {
-        const current = state.document.exportPresetIds;
-        const exportPresetIds = current.includes(action.presetId)
-          ? current.filter((id) => id !== action.presetId)
-          : [...current, action.presetId];
+      case "exportpreset-getoggeld":
+        return withDocument(state, {
+          exportPresetIds: togglePresetId(state.document.exportPresetIds, action.presetId),
+        });
 
-        return withDocument(state, { exportPresetIds });
-      }
+      case "exportplatform-getoggeld":
+        return withDocument(state, {
+          exportPresetIds: setPlatformPresets(
+            state.document.exportPresetIds,
+            action.platform,
+            action.on,
+          ),
+        });
+
+      case "exportpresets-gezet":
+        return withDocument(state, {
+          exportPresetIds: normaliseExportPresetIds(action.presetIds),
+        });
 
       case "uploads-gesynchroniseerd":
         return syncUploads(state, action.assets);
