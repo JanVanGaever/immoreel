@@ -37,12 +37,14 @@ src/
 │   │   ├── projects/new/       Wizard voor een nieuw project
 │   │   ├── projects/[projectId]/
 │   │   ├── media/
-│   │   ├── billing/
-│   │   └── settings/
+│   │   ├── billing/            Abonnement, afrekenen, terugkeer van Mollie
+│   │   └── settings/           Inclusief settings/brand-kit: de huisstijl
 │   ├── (auth)/           Uitgelogde schermen: login, signup, wachtwoord
 │   └── (editor)/         Editor met een eigen, schermvullende shell
 ├── components/
 │   ├── auth/             AuthCard, PasswordInput
+│   ├── billing/          Plannen, afrekenen, betaalgeschiedenis
+│   ├── brand/            Huisstijlformulier en de preview van de eindkaart
 │   ├── dashboard/        Kaarten en lijsten van het dashboard
 │   ├── editor/           De editor: panelen, staat, preview, tijdlijn
 │   ├── new-project/      De wizard: stappen, conceptstaat, keuzekaarten
@@ -51,6 +53,9 @@ src/
 ├── db/                   Schema, databaseverbinding en de stores
 ├── lib/
 │   ├── auth/             Sessies, rollen, serveracties, validatie
+│   ├── billing/          Plannen, btw, planwissels, serveracties
+│   ├── brand/            Huisstijl: kleuren, lettertypes, samenvoegen
+│   ├── mollie/           De koppeling met de betaalprovider
 │   ├── editor/           Document, reducer, beweging, templates, export
 │   ├── new-project/      Stappen, presets, validatie, concept, serveractie
 │   └── ...               cn(), constants, navigatie, formatters
@@ -333,6 +338,45 @@ Twee dingen die de rest verklaren:
 Zonder `RENDER_BACKEND=ffmpeg` draait de nepbackend: die doorloopt de hele
 pijplijn met voortgang en statussen, maar rendert niets. Zo is het scherm te
 gebruiken zonder dat FFmpeg geïnstalleerd staat.
+
+## Facturatie
+
+Abonnementen lopen via **Mollie**. Elk kantoor begint met veertien dagen proef;
+daarna kiest het een plan en betaalt het maandelijks. Alle prijzen staan
+exclusief btw — een makelaarskantoor rekent die terug — met het bedrag inclusief
+21 % er altijd naast, want dat is wat er van de rekening gaat.
+
+De flow in vier stappen:
+
+1. `/billing` toont de stand van het abonnement en de plannen.
+2. `/billing/checkout?plan=…` laat de klant Bancontact of kaart kiezen en legt
+   uit dat hij een doorlopende machtiging afgeeft.
+3. Mollie krijgt een betaling met `sequenceType: "first"`. Die int de eerste
+   maand én levert het mandaat op.
+4. Zodra de webhook zegt dat er betaald is, maken we het abonnement bij Mollie
+   aan. Vanaf dan int Mollie zelf, elke maand.
+
+Drie dingen die de rest verklaren:
+
+- **De webhook is niet te vertrouwen, en dat hoeft ook niet.** Mollie stuurt
+  alleen `id=tr_…`, zonder handtekening. Dat id wordt uitsluitend gebruikt om de
+  betaling *op te halen* met onze eigen sleutel; wat die aanroep teruggeeft is
+  de waarheid. Zie
+  [`src/app/api/billing/webhook/route.ts`](src/app/api/billing/webhook/route.ts).
+- **Upgraden en downgraden zijn niet symmetrisch.** Upgraden gaat meteen in en
+  kost een pro-rata bijbetaling op het bestaande mandaat, zonder betaalscherm;
+  downgraden gaat in als de betaalde periode om is en kost nu niets. Die regels
+  staan op één plek: [`src/lib/billing/changes.ts`](src/lib/billing/changes.ts).
+- **De terugkeerpagina beslist niets.** Dat de klant terugkomt, betekent alleen
+  dat het betaalscherm klaar is. `/billing/return` pollt tot Mollie uitsluitsel
+  geeft en zegt "nog onderweg" als dat het eerlijke antwoord is — bij een
+  SEPA-incasso kan dat dagen duren.
+
+Bij ontwikkelen kan Mollie geen webhook naar `localhost` afleveren. De
+terugkeerpagina valt dan terug op pollen, wat dezelfde verwerking draait; wil je
+de webhook zelf uitproberen, zet dan een tunnel op en vul die in als
+`NEXT_PUBLIC_APP_URL`. Zonder `MOLLIE_API_KEY` tonen de plannen wel, maar kan er
+niets afgesloten worden — de schermen zeggen dat ook.
 
 ## Design system
 

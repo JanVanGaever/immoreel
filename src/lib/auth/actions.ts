@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAuthStore, normaliseEmail } from "@/db/auth-store";
 import type { AuthActionState } from "@/lib/auth/action-state";
@@ -9,12 +8,12 @@ import {
   AUTH_ROUTES,
   MAGIC_LINK_TTL_SECONDS,
   PASSWORD_RESET_TTL_SECONDS,
-  getAppUrl,
   safeRedirectPath,
 } from "@/lib/auth/config";
 import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth/email";
 import { burnPasswordTime, hashPassword, verifyPassword } from "@/lib/auth/password";
 import { EMAIL_RATE_LIMIT, LOGIN_RATE_LIMIT, clearAttempts, consumeAttempt } from "@/lib/auth/rate-limit";
+import { absoluteUrl, clientKey } from "@/lib/auth/request";
 import { createSession, destroySession } from "@/lib/auth/session";
 import { createEmailToken, hashEmailToken } from "@/lib/auth/tokens";
 import {
@@ -36,31 +35,6 @@ import {
  *    registreren, waar dat onvermijdelijk is).
  * 2. Elke actie valideert opnieuw; wat de client stuurt is een suggestie.
  */
-
-async function clientKey(suffix: string): Promise<string> {
-  const headerList = await headers();
-  const forwarded = headerList.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = forwarded || headerList.get("x-real-ip") || "onbekend";
-
-  return `${ip}:${suffix}`;
-}
-
-/**
- * Volledige URL voor in een e-mail. `NEXT_PUBLIC_APP_URL` gaat voor: de
- * Host-header van het verzoek is door een bezoeker te vervalsen, en een
- * herstellink naar een vreemd domein is precies wat je niet wil. Alleen als
- * die variabele ontbreekt (typisch lokaal) vallen we terug op de header.
- */
-async function absoluteUrl(path: string): Promise<string> {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
-  if (configured) return `${configured}${path}`;
-
-  const headerList = await headers();
-  const host = headerList.get("host");
-  if (!host) return `${getAppUrl()}${path}`;
-
-  return `${headerList.get("x-forwarded-proto") ?? "http"}://${host}${path}`;
-}
 
 const GENERIC_CREDENTIALS_ERROR = "E-mailadres of wachtwoord klopt niet.";
 

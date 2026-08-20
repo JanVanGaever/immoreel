@@ -4,6 +4,7 @@ import {
   LifeBuoy,
   Images,
   Settings,
+  Users,
   Video,
   type LucideIcon,
 } from "lucide-react";
@@ -41,6 +42,7 @@ export const navigation: NavSection[] = [
     id: "account",
     label: "Account",
     items: [
+      { label: "Team", href: ROUTES.team, icon: Users },
       { label: "Facturatie", href: ROUTES.billing, icon: CreditCard },
       { label: "Instellingen", href: ROUTES.settings, icon: Settings },
     ],

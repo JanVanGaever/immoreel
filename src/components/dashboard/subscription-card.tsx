@@ -6,11 +6,11 @@ import {
   SUBSCRIPTION_STATUS_LABELS,
   SUBSCRIPTION_STATUS_VARIANTS,
   getPlan,
+  periodSentence,
   subscriptionNeedsAction,
 } from "@/lib/billing";
 import { ROUTES } from "@/lib/constants";
-import { daysUntil } from "@/lib/dashboard";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import type { SubscriptionSummary } from "@/types";
 
 export type SubscriptionCardProps = {
@@ -19,27 +19,6 @@ export type SubscriptionCardProps = {
   mayManage?: boolean;
   className?: string;
 };
-
-/** Eén zin die zegt wat er met het abonnement gaat gebeuren. */
-function periodSentence(subscription: SubscriptionSummary): string {
-  const date = formatDate(subscription.currentPeriodEnd);
-
-  if (subscription.status === "proef") {
-    const days = daysUntil(subscription.trialEndsAt ?? subscription.currentPeriodEnd);
-    const rest = days > 0 ? `Nog ${days} ${days === 1 ? "dag" : "dagen"}` : "Vandaag";
-    return `${rest} proefperiode, tot ${date}.`;
-  }
-
-  if (subscription.status === "achterstallig") {
-    return `Betaling van de periode tot ${date} is nog niet gelukt.`;
-  }
-
-  if (subscription.cancelAtPeriodEnd || subscription.status === "opgezegd") {
-    return `Loopt af op ${date}.`;
-  }
-
-  return `Verlengt automatisch op ${date}.`;
-}
 
 /** Status van het abonnement, met de weg naar facturatie. */
 export function SubscriptionCard({

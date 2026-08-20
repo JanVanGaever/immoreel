@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getBrandKitStore } from "@/db/brand-kit-store";
 import { getProjectStore } from "@/db/project-store";
 import { getRenderJobStore } from "@/db/render-job-store";
 import { assertPermission } from "@/lib/auth/session";
@@ -63,7 +64,9 @@ export async function retryExportsAction(projectId: ID, presetIds: ID[]): Promis
     return { status: "fout", message: "Dit project heeft geen foto's meer om te renderen." };
   }
 
-  const document = toEditorDocument(project);
+  // De huisstijl van nú, niet die van toen de eerste poging vertrok.
+  const brand = await getBrandKitStore().getBrandKit(organisation.id);
+  const document = toEditorDocument(project, brand);
   const store = getRenderJobStore();
   const snapshots: RenderJobSnapshot[] = [];
 

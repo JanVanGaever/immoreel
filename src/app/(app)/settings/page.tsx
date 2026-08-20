@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Palette, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,21 +15,31 @@ import {
 } from "@/components/ui/card";
 import { FormField } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { getBrandKitStore } from "@/db/brand-kit-store";
+import { getTeamStore } from "@/db/team-store";
 import { ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS, can } from "@/lib/auth/roles";
 import { requireSession } from "@/lib/auth/session";
-import { SUPPORT_EMAIL } from "@/lib/constants";
+import { findFont } from "@/lib/brand/fonts";
+import { ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Instellingen" };
 
 export default async function SettingsPage() {
   const { user, organisation, role } = await requireSession();
   const mayManageOrganisation = can(role, "organisation:manage");
+  const mayManageMembers = can(role, "members:manage");
+
+  const [brandKit, members] = await Promise.all([
+    getBrandKitStore().getBrandKit(organisation.id),
+    getTeamStore().listMembers(organisation.id),
+  ]);
+  const memberCount = members.length;
 
   return (
     <>
       <PageHeader
         title="Instellingen"
-        description="Organisatie, huisstijl en voorkeuren. De formulieren zijn nog niet aangesloten."
+        description="Organisatie, huisstijl en voorkeuren. Alleen de huisstijl is al aangesloten."
       />
 
       {!mayManageOrganisation ? (
@@ -83,30 +95,62 @@ export default async function SettingsPage() {
           </CardFooter>
         </Card>
 
+        {/* Samenvatting, geen formulier: de huisstijl heeft een preview nodig
+            en staat daarom op een eigen pagina. */}
         <Card id="huisstijl">
           <CardHeader>
             <div>
               <CardTitle>Huisstijl</CardTitle>
-              <CardDescription>Logo, kleuren en lettertype voor je video&apos;s.</CardDescription>
+              <CardDescription>
+                Logo, kleuren, teksten en lettertype voor je video&apos;s.
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FormField label="Accentkleur" disabled={!mayManageOrganisation}>
-              <Input placeholder="#0f5f57" />
-            </FormField>
-            <FormField label="Lettertype" disabled={!mayManageOrganisation}>
-              <Input placeholder="Inter" />
-            </FormField>
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border"
+                style={{ backgroundColor: brandKit.primaryColor }}
+              >
+                <span
+                  className="size-4 rounded-full"
+                  style={{ backgroundColor: brandKit.secondaryColor }}
+                />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-fg">
+                  {brandKit.contact.agentName || organisation.name}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-fg-subtle tabular-nums">
+                  {brandKit.primaryColor} · {brandKit.secondaryColor} ·{" "}
+                  {findFont(brandKit.fontId).label}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={brandKit.logoUrl ? "neutral" : "warning"} size="sm">
+                {brandKit.logoUrl ? "Logo ingesteld" : "Nog geen logo"}
+              </Badge>
+              <Badge variant="neutral" size="sm">
+                Watermerk standaard {brandKit.watermarkByDefault ? "aan" : "uit"}
+              </Badge>
+            </div>
           </CardContent>
           <CardFooter>
-            <Button disabled>Opslaan</Button>
+            <Link href={ROUTES.brandKit} className={buttonClasses("secondary", "md")}>
+              <Palette />
+              Huisstijl bewerken
+            </Link>
+            <span className="text-xs text-fg-subtle">Met live preview van de eindkaart</span>
           </CardFooter>
         </Card>
 
         <Card id="team">
           <CardHeader>
             <div>
-              <CardTitle>Rollen</CardTitle>
+              <CardTitle>Team en rollen</CardTitle>
               <CardDescription>Wat elke rol binnen je kantoor mag.</CardDescription>
             </div>
           </CardHeader>
@@ -124,8 +168,14 @@ export default async function SettingsPage() {
             ))}
           </CardContent>
           <CardFooter>
-            <Button disabled>Collega uitnodigen</Button>
-            <span className="text-xs text-fg-subtle">Uitnodigingen komen later</span>
+            <Link href={ROUTES.team} className={buttonClasses("secondary", "md")}>
+              <Users />
+              Team beheren
+            </Link>
+            <span className="text-xs text-fg-subtle">
+              {memberCount} {memberCount === 1 ? "collega" : "collega's"}
+              {mayManageMembers ? " · uitnodigen en rollen aanpassen" : ""}
+            </span>
           </CardFooter>
         </Card>
 

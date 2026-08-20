@@ -1,5 +1,8 @@
 import type {
   AuthToken,
+  BrandKit,
+  CheckoutAttempt,
+  Invitation,
   Invoice,
   MediaAsset,
   Membership,
@@ -20,7 +23,10 @@ export const tables = {
   users: "users",
   authTokens: "auth_tokens",
   organisations: "organisations",
+  brandKits: "brand_kits",
+  checkoutAttempts: "checkout_attempts",
   memberships: "memberships",
+  invitations: "invitations",
   properties: "properties",
   mediaAssets: "media_assets",
   templates: "templates",
@@ -36,7 +42,10 @@ export type Rows = {
   users: UserRecord;
   auth_tokens: AuthToken;
   organisations: Organisation;
+  brand_kits: BrandKit;
+  checkout_attempts: CheckoutAttempt;
   memberships: Membership;
+  invitations: Invitation;
   properties: Property;
   media_assets: MediaAsset;
   templates: Template;

@@ -14,6 +14,7 @@ import {
   setPlatformPresets,
   togglePresetId,
 } from "@/lib/editor/export-presets";
+import { clearBrandOverrides } from "@/lib/editor/branding";
 import { createMotion, normaliseMotion } from "@/lib/editor/motion";
 import { templateStyle, type TransitionId } from "@/lib/editor/templates";
 import { resolveTemplateId } from "@/lib/new-project/draft";
@@ -64,6 +65,8 @@ export type EditorAction =
   | { type: "templatestijl-toegepast" }
   | { type: "overgang-gekozen"; transition: TransitionId; sceneIds?: ID[] }
   | { type: "branding-gewijzigd"; changes: Partial<BrandingSettings> }
+  /** Elk overruled veld terug op 'volg de huisstijl'. */
+  | { type: "huisstijl-hersteld" }
   | { type: "audio-gewijzigd"; changes: Partial<AudioSettings> }
   | { type: "exportpreset-getoggeld"; presetId: ID }
   /** Een heel platform in één keer aan- of uitzetten (alle formaten ervan). */
@@ -312,6 +315,11 @@ export function createEditorReducer(templates: Template[]): EditorReducer {
       case "branding-gewijzigd":
         return withDocument(state, {
           branding: { ...state.document.branding, ...action.changes },
+        });
+
+      case "huisstijl-hersteld":
+        return withDocument(state, {
+          branding: clearBrandOverrides(state.document.branding),
         });
 
       case "audio-gewijzigd":

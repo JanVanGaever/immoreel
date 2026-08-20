@@ -1,4 +1,4 @@
-import { findBrandKit, resolveAccentColor } from "@/lib/editor/branding";
+import { contactLines } from "@/lib/brand/kit";
 import type { RenderPlan } from "@/lib/editor/render-plan";
 import type { EncodingMode, EncodingProfile, RenderTarget } from "@/workers/render/ffmpeg/config";
 import { videoEncodingArgs } from "@/workers/render/ffmpeg/config";
@@ -42,10 +42,8 @@ export type CardCommand = {
 export function buildCardCommand(input: CardCommandInput): CardCommand {
   const { plan, target, encoding, mode } = input;
   const frames = Math.max(Math.round(input.durationInSeconds * target.fps), 1);
-  const background = toFfmpegColor(resolveAccentColor(plan.branding));
-  const foreground = toFfmpegColor(
-    findBrandKit(plan.branding.brandKitId)?.onAccentColor ?? "#ffffff",
-  );
+  const background = toFfmpegColor(plan.brand.primaryColor);
+  const foreground = toFfmpegColor(plan.brand.onPrimaryColor);
 
   const filters: string[] = [];
 
@@ -154,13 +152,24 @@ export function introCardText(plan: RenderPlan): string | null {
 }
 
 /**
- * Wat er op de contactkaart komt. Elke regel is er een die de makelaar zelf
- * ingevuld heeft; staat er niets, dan wordt het een leeg vlak in de huisstijl.
+ * Wat er op de eindkaart komt, in dezelfde volgorde als in de preview op de
+ * instellingenpagina: de vraag, de oproep, de naam, en dan hoe je het kantoor
+ * bereikt.
+ *
+ * Elke regel komt uit de huisstijl van het kantoor of uit wat dit project
+ * daarvan overruled heeft — `resolveBrand()` heeft dat verschil hiervoor al
+ * weggewerkt. Is alles leeg, dan wordt het een vlak in de huisstijlkleur; dat
+ * is eerlijker dan een kaart met half ingevulde tekst.
  */
 export function outroCardText(plan: RenderPlan): string | null {
-  const lines = [plan.branding.agentName, plan.branding.agentPhone]
-    .map((line) => line?.trim())
-    .filter((line): line is string => Boolean(line));
+  const lines = [
+    plan.brand.outroText,
+    plan.brand.ctaText,
+    plan.brand.contact.agentName,
+    ...contactLines(plan.brand),
+  ]
+    .map((line) => line.trim())
+    .filter(Boolean);
 
   return lines.length > 0 ? lines.join("\n") : null;
 }

@@ -23,10 +23,20 @@ export type AuthStore = {
   /** Maakt gebruiker, organisatie en het owner-lidmaatschap in één keer aan. */
   createAccount(input: CreateAccountInput): Promise<CreateAccountResult>;
   setPasswordHash(userId: ID, passwordHash: string): Promise<void>;
+  setUserName(userId: ID, name: string): Promise<void>;
   markEmailVerified(userId: ID): Promise<void>;
   /** De organisatie waarin de gebruiker werkt. Voorlopig één per gebruiker. */
   findMembershipByUser(userId: ID): Promise<Membership | null>;
   findOrganisation(organisationId: ID): Promise<Organisation | null>;
+  /* --- Team: de lidmaatschappen van één organisatie ---------------------- */
+  /** Iedereen die bij dit kantoor hoort, oudste lidmaatschap eerst. */
+  listMemberships(organisationId: ID): Promise<Membership[]>;
+  findMembership(membershipId: ID): Promise<Membership | null>;
+  /** Voor wie via een uitnodiging binnenkomt: een gebruiker zonder eigen kantoor. */
+  createUser(input: CreateUserInput): Promise<UserRecord>;
+  createMembership(input: CreateMembershipInput): Promise<Membership>;
+  updateMembershipRole(membershipId: ID, role: Role): Promise<Membership | null>;
+  deleteMembership(membershipId: ID): Promise<void>;
   createAuthToken(input: CreateAuthTokenInput): Promise<AuthToken>;
   /** Geeft het token terug en markeert het meteen als gebruikt (eenmalig). */
   consumeAuthToken(purpose: AuthTokenPurpose, tokenHash: string): Promise<AuthToken | null>;
@@ -45,6 +55,20 @@ export type CreateAccountResult = {
   user: UserRecord;
   organisation: Organisation;
   membership: Membership;
+};
+
+export type CreateUserInput = {
+  name: string;
+  email: string;
+  passwordHash: string | null;
+  /** Wie via een uitnodigingslink binnenkomt, bewijst dat hij bij de mailbox kan. */
+  emailVerified?: boolean;
+};
+
+export type CreateMembershipInput = {
+  userId: ID;
+  organisationId: ID;
+  role: Role;
 };
 
 export type CreateAuthTokenInput = {
@@ -142,6 +166,50 @@ function seed(data: MemoryData): MemoryData {
     updatedAt: now,
   });
 
+  // Twee collega's, zodat de teampagina in development meer laat zien dan één
+  // rij met jezelf erin. Ze hebben geen wachtwoord: inloggen doen ze niet, ze
+  // staan er om rollen, badges en verwijderen te kunnen proberen.
+  const colleagues: { id: ID; membershipId: ID; name: string; email: string; role: Role }[] = [
+    {
+      id: "usr_demo_editor",
+      membershipId: "mem_demo_editor",
+      name: "Sofie Peeters",
+      email: "sofie@immoreel.be",
+      role: "editor",
+    },
+    {
+      id: "usr_demo_viewer",
+      membershipId: "mem_demo_viewer",
+      name: "Karel Maes",
+      email: "karel@immoreel.be",
+      role: "viewer",
+    },
+  ];
+
+  for (const [index, colleague] of colleagues.entries()) {
+    const joinedAt = new Date(Date.now() - (index + 1) * 86_400_000).toISOString();
+
+    data.users.set(colleague.id, {
+      id: colleague.id,
+      email: colleague.email,
+      name: colleague.name,
+      avatarUrl: null,
+      emailVerifiedAt: joinedAt,
+      passwordHash: null,
+      createdAt: joinedAt,
+      updatedAt: joinedAt,
+    });
+
+    data.memberships.set(colleague.membershipId, {
+      id: colleague.membershipId,
+      userId: colleague.id,
+      organisationId,
+      role: colleague.role,
+      createdAt: joinedAt,
+      updatedAt: joinedAt,
+    });
+  }
+
   return data;
 }
 
@@ -216,6 +284,14 @@ const memoryStore: AuthStore = {
     user.updatedAt = new Date().toISOString();
   },
 
+  async setUserName(userId, name) {
+    const user = getData().users.get(userId);
+    if (!user) return;
+
+    user.name = name.trim();
+    user.updatedAt = new Date().toISOString();
+  },
+
   async markEmailVerified(userId) {
     const user = getData().users.get(userId);
     if (!user || user.emailVerifiedAt) return;
@@ -234,6 +310,67 @@ const memoryStore: AuthStore = {
 
   async findOrganisation(organisationId) {
     return getData().organisations.get(organisationId) ?? null;
+  },
+
+  async listMemberships(organisationId) {
+    return [...getData().memberships.values()]
+      .filter((membership) => membership.organisationId === organisationId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  },
+
+  async findMembership(membershipId) {
+    return getData().memberships.get(membershipId) ?? null;
+  },
+
+  async createUser({ name, email, passwordHash, emailVerified = false }) {
+    const now = new Date().toISOString();
+    const user: UserRecord = {
+      id: `usr_${randomUUID()}`,
+      email: normaliseEmail(email),
+      name: name.trim(),
+      avatarUrl: null,
+      passwordHash,
+      emailVerifiedAt: emailVerified ? now : null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    getData().users.set(user.id, user);
+
+    return user;
+  },
+
+  async createMembership({ userId, organisationId, role }) {
+    const now = new Date().toISOString();
+    const membership: Membership = {
+      id: `mem_${randomUUID()}`,
+      userId,
+      organisationId,
+      role,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    getData().memberships.set(membership.id, membership);
+
+    return membership;
+  },
+
+  async updateMembershipRole(membershipId, role) {
+    const membership = getData().memberships.get(membershipId);
+    if (!membership) return null;
+
+    membership.role = role;
+    membership.updatedAt = new Date().toISOString();
+
+    return membership;
+  },
+
+  async deleteMembership(membershipId) {
+    // De gebruiker zelf blijft bestaan: hij hoort alleen niet meer bij dit
+    // kantoor. Zonder lidmaatschap komt hij nergens meer binnen — zie
+    // `getSession()`, dat zonder lidmaatschap geen sessie teruggeeft.
+    getData().memberships.delete(membershipId);
   },
 
   async createAuthToken({ userId, purpose, tokenHash, expiresAt }) {

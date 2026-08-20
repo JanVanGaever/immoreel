@@ -1,8 +1,8 @@
-import { findBrandKit, resolveAccentColor } from "@/lib/editor/branding";
+import { resolveBrand } from "@/lib/brand/kit";
 import { buildTimeline, findScene, projectTransition, type EditorDocument } from "@/lib/editor/document";
 import { normaliseMotion } from "@/lib/editor/motion";
 import { getTransition, templateStyle, type TransitionId } from "@/lib/editor/templates";
-import type { AspectRatio, ID, LogoPlacement, SceneMotion } from "@/types";
+import type { AspectRatio, ID, LogoPlacement, ResolvedBrand, SceneMotion } from "@/types";
 
 /**
  * Wat de previewspeler afspeelt.
@@ -101,18 +101,15 @@ export type PreviewSlide = {
 };
 
 /**
- * De huisstijl zoals de preview ze nodig heeft: kleuren al opgezocht, geen
- * kit-id meer. Zo hoeft er tijdens het afspelen niets meer uitgezocht te
- * worden — vierentwintig keer per seconde een lijst doorzoeken is werk dat
- * hier één keer gebeurt.
+ * De huisstijl zoals de preview ze nodig heeft: de kit van het kantoor en de
+ * afwijkingen van dit project al over elkaar gelegd, kleuren al berekend. Zo
+ * hoeft er tijdens het afspelen niets meer uitgezocht te worden — vierentwintig
+ * keer per seconde een contrastverhouding uitrekenen is werk dat hier één keer
+ * gebeurt.
  */
 export type PreviewBranding = {
   title: string;
-  agentName: string | null;
-  agentPhone: string | null;
-  accentColor: string;
-  onAccentColor: string;
-  logoInitials: string;
+  brand: ResolvedBrand;
   logoPlacement: LogoPlacement;
 };
 
@@ -169,18 +166,14 @@ export function buildPreviewPlan(document: EditorDocument): PreviewPlan {
     };
   });
 
-  const kit = findBrandKit(document.branding.brandKitId);
+  const brand = resolveBrand(document.brand, document.branding);
 
   return {
     aspectRatio: document.aspectRatio,
     branding: {
       title: document.title,
-      agentName: document.branding.agentName,
-      agentPhone: document.branding.agentPhone,
-      accentColor: resolveAccentColor(document.branding),
-      onAccentColor: kit?.onAccentColor ?? "#ffffff",
-      logoInitials: kit?.logoInitials ?? "IM",
-      logoPlacement: document.branding.logoPlacement,
+      brand,
+      logoPlacement: brand.showWatermark ? document.branding.logoPlacement : "geen",
     },
     size,
     durationInSeconds: timeline.durationInSeconds,

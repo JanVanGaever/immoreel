@@ -22,10 +22,15 @@ export const ROUTES = {
   editor: (projectId: string) => `/editor/${projectId}`,
   media: "/media",
   billing: "/billing",
+  /** Betaalmethode kiezen voor dit plan; de stap vóór Mollie. */
+  billingCheckout: (planId: string) => `/billing/checkout?plan=${planId}`,
+  /** Waar Mollie de klant naartoe stuurt na het betalen. */
+  billingReturn: (paymentId: string) => `/billing/return?payment=${encodeURIComponent(paymentId)}`,
   settings: "/settings",
-  /** Ankers binnen de instellingenpagina, voor de snelkoppelingen op het dashboard. */
-  brandKit: "/settings#huisstijl",
-  team: "/settings#team",
+  /** De huisstijl van het kantoor: eigen pagina, want ze heeft een preview nodig. */
+  brandKit: "/settings/brand-kit",
+  /** Het team van het kantoor: collega's, rollen en uitnodigingen. */
+  team: "/settings/team",
 } as const;
 
 /**
@@ -46,4 +51,6 @@ export const API_ROUTES = {
   exportPoster: (projectId: string, jobId: string) =>
     `/api/projects/${projectId}/exports/${jobId}/poster`,
   exportArchive: (projectId: string) => `/api/projects/${projectId}/exports/zip`,
+  /** De stand van één betaling; de terugkeerpagina pollt hierop. */
+  paymentStatus: (paymentId: string) => `/api/billing/payments/${encodeURIComponent(paymentId)}`,
 } as const;

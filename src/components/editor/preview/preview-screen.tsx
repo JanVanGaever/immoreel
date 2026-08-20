@@ -1,6 +1,7 @@
 "use client";
 
 import { ImageOff } from "lucide-react";
+import { BrandMark, EndCardPreview } from "@/components/brand/end-card-preview";
 import { motionStyleAt } from "@/lib/editor/motion";
 import {
   transitionStyleAt,
@@ -75,19 +76,21 @@ export function PreviewScreen({ plan, photos, frame, className }: PreviewScreenP
         </p>
       )}
 
-      {/* Het logo ligt over elk beeld, ook over de titelkaarten en de overgang. */}
+      {/* Het watermerk ligt over elk beeld, ook over de titelkaarten en de
+          overgang. Staat het uit in de huisstijl, dan heeft het plan de plaats
+          al op "geen" gezet. */}
       {plan.slides.length > 0 && plan.branding.logoPlacement !== "geen" ? (
         <span
           className={cn(
-            "absolute flex size-[9%] min-h-6 min-w-6 items-center justify-center rounded-md text-[clamp(0.5rem,1.6cqw,0.75rem)] font-bold",
+            "absolute flex aspect-square w-[9%] min-w-6 items-center justify-center",
+            "drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)]",
             logoPlacementClassName(plan.branding.logoPlacement),
           )}
-          style={{
-            backgroundColor: plan.branding.accentColor,
-            color: plan.branding.onAccentColor,
-          }}
         >
-          {plan.branding.logoInitials}
+          <BrandMark
+            brand={plan.branding.brand}
+            className="size-full max-h-full max-w-full text-[clamp(0.4375rem,2.6cqw,0.875rem)]"
+          />
         </span>
       ) : null}
     </div>
@@ -106,7 +109,12 @@ type PreviewLayerProps = {
 
 function PreviewLayer({ plan, photos, slide, progress, layer }: PreviewLayerProps) {
   const { branding } = plan;
-  const cardStyle = { backgroundColor: branding.accentColor, color: branding.onAccentColor };
+  const { brand } = branding;
+  const cardStyle = {
+    backgroundColor: brand.primaryColor,
+    color: brand.onPrimaryColor,
+    fontFamily: brand.fontStack,
+  };
   const photo = slide.photo ? photos.get(slide.photo.url) : null;
 
   return (
@@ -126,25 +134,19 @@ function PreviewLayer({ plan, photos, slide, progress, layer }: PreviewLayerProp
             {branding.title || "Naamloos project"}
           </p>
           <p className="text-[clamp(0.625rem,2cqw,0.875rem)] opacity-80">
-            {branding.agentName ?? "Immoreel"}
+            {brand.contact.agentName || "Immoreel"}
           </p>
         </div>
       ) : null}
 
+      {/* Precies dezelfde kaart als op de instellingenpagina: één component,
+          dus geen tweede plek waar de eindkaart anders kan gaan werken. */}
       {slide.kind === "outro" ? (
-        <div
-          className="flex size-full flex-col items-center justify-center gap-1.5 p-[8%] text-center"
-          style={cardStyle}
-        >
-          <p className="text-[clamp(0.875rem,3cqw,1.5rem)] font-semibold">
-            {branding.agentName ?? "Neem contact op"}
-          </p>
-          {branding.agentPhone ? (
-            <p className="text-[clamp(0.75rem,2.5cqw,1.125rem)] tabular-nums opacity-90">
-              {branding.agentPhone}
-            </p>
-          ) : null}
-        </div>
+        <EndCardPreview
+          brand={brand}
+          aspectRatio={plan.aspectRatio}
+          className="size-full rounded-none border-0 shadow-none"
+        />
       ) : null}
 
       {slide.kind === "scene" ? (

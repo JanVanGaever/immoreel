@@ -6,6 +6,7 @@ import { getTransition, templateStyle, type TransitionId } from "@/lib/editor/te
 import type {
   AspectRatio,
   AudioSettings,
+  BrandKit,
   BrandingSettings,
   ID,
   Scene,
@@ -60,6 +61,13 @@ export type EditorDocument = {
   aspectRatio: AspectRatio;
   templateId: ID | null;
   scenes: EditorScene[];
+  /**
+   * De huisstijl van het kantoor. Alleen om te lezen: die verander je op de
+   * instellingenpagina, niet in de editor. Ze zit hier omdat elke preview haar
+   * nodig heeft en niemand daarvoor de server wil bevragen.
+   */
+  brand: BrandKit;
+  /** Waar dit project van de huisstijl afwijkt. */
   branding: BrandingSettings;
   audio: AudioSettings;
   exportPresetIds: ID[];
@@ -131,12 +139,17 @@ export function createScene(options: {
 /**
  * Van opgeslagen project naar werkdocument.
  *
+ * De huisstijl komt er als tweede argument bij en niet uit het project: ze
+ * hoort bij de organisatie, en wie een project laadt heeft haar sowieso al
+ * moeten opvragen. Zo is er geen enkel pad waarlangs een editor zonder
+ * huisstijl kan ontstaan.
+ *
  * De foto's zelf staan nog niet in object storage (zie `project-store.ts`),
  * dus een scène uit de databank heeft geen voorbeeld. Dat is zichtbaar in de
  * lijst in plaats van verstopt: een grijs kader met de bestandsnaam is
  * eerlijker dan een lege plek.
  */
-export function toEditorDocument(project: VideoProject): EditorDocument {
+export function toEditorDocument(project: VideoProject, brand: BrandKit): EditorDocument {
   const style = templateStyle(project.templateId);
 
   return {
@@ -156,6 +169,7 @@ export function toEditorDocument(project: VideoProject): EditorDocument {
           fileName: `Foto ${index + 1}`,
         }),
       })),
+    brand,
     branding: createBranding(project.branding),
     audio: clampAudio(createAudio(project.audio)),
     // Een project uit de databank kan nog ids van vóór de huidige catalogus

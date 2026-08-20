@@ -1,71 +1,18 @@
-import type { BrandingSettings, ID, LogoPlacement } from "@/types";
+import type { BrandingSettings, LogoPlacement } from "@/types";
 
 /**
- * De huisstijlkeuzes in de editor.
+ * De huisstijlkeuzes van één project.
  *
- * Een echte huisstijl (logo, kleuren, lettertype) hoort bij de organisatie en
- * komt later uit een `BrandKitStore` — vandaar dat `listBrandKits()` hier een
- * vaste lijst teruggeeft en niet een import van een store. De vorm klopt wel
- * al: het project bewaart alleen het id van de kit plus wat het ervan gebruikt.
+ * De huisstijl zelf — logo, kleuren, teksten, lettertype — hoort bij de
+ * organisatie en staat in `src/lib/brand/`. Wat hier staat is wat een project
+ * daar bovenop legt: waar het logo komt, of de slotkaart mee moet, en de
+ * velden waarin dit ene pand van het kantoor afwijkt.
+ *
+ * Alles wat overrulebaar is, begint op `null`. Dat is geen lege waarde maar
+ * een verwijzing: "neem wat de huisstijl zegt". Een kantoor dat volgende maand
+ * zijn kleuren vernieuwt, ziet dat daardoor in al zijn projecten terug —
+ * behalve in die waar iemand bewust iets anders koos.
  */
-
-export type BrandKit = {
-  id: ID;
-  name: string;
-  description: string;
-  /** Hex, zoals die in de video gebruikt wordt. */
-  accentColor: string;
-  /** Tekstkleur op dat accent, zodat een titelkaart leesbaar blijft. */
-  onAccentColor: string;
-  /** Placeholder zolang er geen echt logo geüpload is. */
-  logoInitials: string;
-};
-
-const BRAND_KITS: BrandKit[] = [
-  {
-    id: "kit_immoreel",
-    name: "Immoreel (standaard)",
-    description: "Petrol en wit. Neutraal genoeg voor elk pand.",
-    accentColor: "#0f5f57",
-    onAccentColor: "#ffffff",
-    logoInitials: "IM",
-  },
-  {
-    id: "kit_warm",
-    name: "Warm goud",
-    description: "Donkere kaarten met een gouden accent. Past bij het duurdere segment.",
-    accentColor: "#a4762a",
-    onAccentColor: "#1a1206",
-    logoInitials: "AG",
-  },
-  {
-    id: "kit_helder",
-    name: "Helder blauw",
-    description: "Fris en zakelijk; werkt goed op LinkedIn.",
-    accentColor: "#175cd3",
-    onAccentColor: "#ffffff",
-    logoInitials: "HB",
-  },
-  {
-    id: "kit_zwartwit",
-    name: "Zwart-wit",
-    description: "Geen kleur, alleen typografie. Laat de foto's het werk doen.",
-    accentColor: "#101828",
-    onAccentColor: "#ffffff",
-    logoInitials: "ZW",
-  },
-];
-
-/** TODO: vervangen door de kits van de organisatie zodra die bewaard worden. */
-export function listBrandKits(): BrandKit[] {
-  return BRAND_KITS;
-}
-
-export function findBrandKit(brandKitId: ID | null | undefined): BrandKit | null {
-  if (!brandKitId) return null;
-
-  return BRAND_KITS.find((kit) => kit.id === brandKitId) ?? null;
-}
 
 export type LogoPlacementOption = {
   id: LogoPlacement;
@@ -87,20 +34,36 @@ export function logoPlacementClassName(placement: LogoPlacement): string {
 }
 
 export const DEFAULT_BRANDING: BrandingSettings = {
-  brandKitId: "kit_immoreel",
   logoPlacement: "rechtsonder",
   showContactCard: true,
   showPriceBadge: false,
   accentColor: null,
+  secondaryColor: null,
+  outroText: null,
+  ctaText: null,
+  fontId: null,
+  showWatermark: null,
   agentName: null,
   agentPhone: null,
+  agentEmail: null,
 };
 
 export function createBranding(overrides: Partial<BrandingSettings> = {}): BrandingSettings {
   return { ...DEFAULT_BRANDING, ...overrides };
 }
 
-/** De kleur die de video krijgt: eigen keuze eerst, anders die van de kit. */
-export function resolveAccentColor(branding: BrandingSettings): string {
-  return branding.accentColor ?? findBrandKit(branding.brandKitId)?.accentColor ?? "#0f5f57";
+/** Zet alle afwijkingen terug: het project volgt de huisstijl weer volledig. */
+export function clearBrandOverrides(branding: BrandingSettings): BrandingSettings {
+  return {
+    ...branding,
+    accentColor: null,
+    secondaryColor: null,
+    outroText: null,
+    ctaText: null,
+    fontId: null,
+    showWatermark: null,
+    agentName: null,
+    agentPhone: null,
+    agentEmail: null,
+  };
 }

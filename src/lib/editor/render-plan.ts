@@ -2,7 +2,8 @@ import type { EditorDocument } from "@/lib/editor/document";
 import type { ExportPreset } from "@/lib/editor/export-presets";
 import { normaliseMotion, toZoompanFilter, type ZoompanFilter } from "@/lib/editor/motion";
 import { getTransition, templateStyle, type TransitionId } from "@/lib/editor/templates";
-import type { ID, SceneMotion } from "@/types";
+import { resolveBrand } from "@/lib/brand/kit";
+import type { ID, ResolvedBrand, SceneMotion } from "@/types";
 
 /**
  * Wat de renderpijplijn straks krijgt.
@@ -48,7 +49,14 @@ export type RenderPlan = {
   durationInSeconds: number;
   scenes: ScenePlan[];
   audio: EditorDocument["audio"];
+  /** Waar het logo staat en welke kaarten mee moeten. */
   branding: EditorDocument["branding"];
+  /**
+   * De huisstijl van het kantoor met de afwijkingen van dit project erin
+   * verwerkt. De worker draait los van de databank en kan de kit dus niet zelf
+   * opzoeken; ze zit daarom in het plan, zoals alles wat de render nodig heeft.
+   */
+  brand: ResolvedBrand;
   /** Foto's die nog geen asset in de opslag hebben; die kunnen niet mee. */
   missingAssets: ID[];
 };
@@ -102,6 +110,7 @@ export function buildRenderPlan(document: EditorDocument, preset: ExportPreset):
     scenes,
     audio: document.audio,
     branding: document.branding,
+    brand: resolveBrand(document.brand, document.branding),
     missingAssets: document.scenes
       .filter((scene) => !scene.source.assetId)
       .map((scene) => scene.id),

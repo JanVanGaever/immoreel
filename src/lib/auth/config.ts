@@ -20,15 +20,17 @@ export const AUTH_ROUTES = {
   forgotPassword: "/forgot-password",
   resetPassword: "/reset-password",
   magicLink: "/magic-link",
+  /** De uitnodiging van een collega: account aanmaken binnen een bestaand kantoor. */
+  invite: "/invite",
 } as const;
 
 /** Routes die zonder sessie bereikbaar zijn. */
 export const PUBLIC_ROUTES: readonly string[] = Object.values(AUTH_ROUTES);
 
 /**
- * Routes die geen zin hebben als je al ingelogd bent. Herstellink en magic
- * link staan er bewust niet bij: die moeten ook werken als er nog een oude
- * sessie openstaat.
+ * Routes die geen zin hebben als je al ingelogd bent. Herstellink, magic link
+ * en uitnodiging staan er bewust niet bij: die moeten ook werken als er nog
+ * een oude sessie openstaat.
  */
 export const GUEST_ONLY_ROUTES: readonly string[] = [
   AUTH_ROUTES.login,

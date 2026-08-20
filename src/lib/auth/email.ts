@@ -55,6 +55,33 @@ export async function sendPasswordResetEmail(to: string, link: string): Promise<
   });
 }
 
+export type TeamInvite = {
+  organisationName: string;
+  inviterName: string;
+  /** De rol in gewone taal ("Editor"), niet de sleutel. */
+  roleLabel: string;
+};
+
+export async function sendTeamInviteEmail(
+  to: string,
+  link: string,
+  invite: TeamInvite,
+): Promise<void> {
+  await deliver({
+    to,
+    link,
+    subject: `${invite.inviterName} nodigt je uit bij ${invite.organisationName} op ${APP_NAME}`,
+    body: [
+      `${invite.inviterName} wil met je samenwerken in ${invite.organisationName}.`,
+      `Je komt binnen als ${invite.roleLabel.toLowerCase()}.`,
+      "",
+      "Klik op de link hieronder om je account af te werken. De link is zeven dagen",
+      "geldig en werkt één keer.",
+      `Ken je deze uitnodiging niet? Negeer deze mail of laat het weten via ${SUPPORT_EMAIL}.`,
+    ].join("\n"),
+  });
+}
+
 export async function sendMagicLinkEmail(to: string, link: string): Promise<void> {
   await deliver({
     to,

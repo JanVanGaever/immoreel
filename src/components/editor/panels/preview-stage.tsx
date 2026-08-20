@@ -2,7 +2,9 @@
 
 import { ImageOff } from "lucide-react";
 import { findScene, type EditorDocument, type TimelineSegment } from "@/lib/editor/document";
-import { findBrandKit, logoPlacementClassName, resolveAccentColor } from "@/lib/editor/branding";
+import { BrandMark, EndCardPreview } from "@/components/brand/end-card-preview";
+import { resolveBrand } from "@/lib/brand/kit";
+import { logoPlacementClassName } from "@/lib/editor/branding";
 import { motionStyleAt } from "@/lib/editor/motion";
 import { aspectRatioCss } from "@/lib/aspect-ratios";
 import { cn } from "@/lib/utils";
@@ -29,8 +31,7 @@ export type PreviewStageProps = {
 };
 
 export function PreviewStage({ document, segment, progress, className }: PreviewStageProps) {
-  const accent = resolveAccentColor(document.branding);
-  const kit = findBrandKit(document.branding.brandKitId);
+  const brand = resolveBrand(document.brand, document.branding);
   const scene = segment?.kind === "scene" ? findScene(document, segment.sceneId) : null;
 
   return (
@@ -46,31 +47,28 @@ export function PreviewStage({ document, segment, progress, className }: Preview
       {segment?.kind === "intro" ? (
         <div
           className="flex size-full flex-col items-center justify-center gap-2 p-[8%] text-center"
-          style={{ backgroundColor: accent, color: kit?.onAccentColor ?? "#ffffff" }}
+          style={{
+            backgroundColor: brand.primaryColor,
+            color: brand.onPrimaryColor,
+            fontFamily: brand.fontStack,
+          }}
         >
           <p className="text-[clamp(1rem,4cqw,2rem)] leading-tight font-semibold text-balance">
             {document.title || "Naamloos project"}
           </p>
           <p className="text-[clamp(0.625rem,2cqw,0.875rem)] opacity-80">
-            {document.branding.agentName ?? "Immoreel"}
+            {brand.contact.agentName || "Immoreel"}
           </p>
         </div>
       ) : null}
 
+      {/* Dezelfde eindkaart als op de instellingenpagina en in de speler. */}
       {segment?.kind === "outro" ? (
-        <div
-          className="flex size-full flex-col items-center justify-center gap-1.5 p-[8%] text-center"
-          style={{ backgroundColor: accent, color: kit?.onAccentColor ?? "#ffffff" }}
-        >
-          <p className="text-[clamp(0.875rem,3cqw,1.5rem)] font-semibold">
-            {document.branding.agentName ?? "Neem contact op"}
-          </p>
-          {document.branding.agentPhone ? (
-            <p className="text-[clamp(0.75rem,2.5cqw,1.125rem)] tabular-nums opacity-90">
-              {document.branding.agentPhone}
-            </p>
-          ) : null}
-        </div>
+        <EndCardPreview
+          brand={brand}
+          aspectRatio={document.aspectRatio}
+          className="size-full rounded-none border-0 shadow-none"
+        />
       ) : null}
 
       {scene ? (
@@ -109,7 +107,7 @@ export function PreviewStage({ document, segment, progress, className }: Preview
           {document.branding.showPriceBadge && scene.order === 0 ? (
             <span
               className="absolute top-[6%] left-[6%] rounded-md px-2 py-1 text-[clamp(0.5rem,1.8cqw,0.875rem)] font-semibold"
-              style={{ backgroundColor: accent, color: kit?.onAccentColor ?? "#ffffff" }}
+              style={{ backgroundColor: brand.primaryColor, color: brand.onPrimaryColor }}
             >
               Prijs op aanvraag
             </span>
@@ -123,16 +121,19 @@ export function PreviewStage({ document, segment, progress, className }: Preview
         </div>
       ) : null}
 
-      {/* Het logo ligt over elk beeld, ook over de titelkaarten. */}
-      {document.branding.logoPlacement !== "geen" ? (
+      {/* Het watermerk ligt over elk beeld, ook over de titelkaarten. */}
+      {brand.showWatermark && document.branding.logoPlacement !== "geen" ? (
         <span
           className={cn(
-            "absolute flex size-[9%] min-h-6 min-w-6 items-center justify-center rounded-md text-[clamp(0.5rem,1.6cqw,0.75rem)] font-bold",
+            "absolute flex aspect-square w-[9%] min-w-6 items-center justify-center",
+            "drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)]",
             logoPlacementClassName(document.branding.logoPlacement),
           )}
-          style={{ backgroundColor: accent, color: kit?.onAccentColor ?? "#ffffff" }}
         >
-          {kit?.logoInitials ?? "IM"}
+          <BrandMark
+            brand={brand}
+            className="size-full max-h-full max-w-full text-[clamp(0.4375rem,2.6cqw,0.875rem)]"
+          />
         </span>
       ) : null}
     </div>

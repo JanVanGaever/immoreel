@@ -78,6 +78,8 @@ export type EditorController = {
   applyTemplateStyle: () => void;
   setTransition: (transition: TransitionId, sceneIds?: ID[]) => void;
   updateBranding: (changes: Partial<BrandingSettings>) => void;
+  /** Alle afwijkingen wissen: het project volgt de huisstijl weer volledig. */
+  resetBrandOverrides: () => void;
   updateAudio: (changes: Partial<AudioSettings>) => void;
   toggleExportPreset: (presetId: ID) => void;
   /** Alle formaten van één platform tegelijk aan- of uitzetten. */
@@ -198,6 +200,7 @@ export function useEditor({
     setTransition: (transition, sceneIds) =>
       dispatch({ type: "overgang-gekozen", transition, sceneIds }),
     updateBranding: (changes) => dispatch({ type: "branding-gewijzigd", changes }),
+    resetBrandOverrides: () => dispatch({ type: "huisstijl-hersteld" }),
     updateAudio: (changes) => dispatch({ type: "audio-gewijzigd", changes }),
     toggleExportPreset: (presetId) => dispatch({ type: "exportpreset-getoggeld", presetId }),
     toggleExportPlatform: (platform, on) =>

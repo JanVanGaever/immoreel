@@ -16,6 +16,7 @@ import { getDashboardStore } from "@/db/dashboard-store";
 import { can } from "@/lib/auth/roles";
 import { requireSession } from "@/lib/auth/session";
 import { subscriptionNeedsAction } from "@/lib/billing";
+import { loadSubscription } from "@/lib/billing/service";
 import { ROUTES } from "@/lib/constants";
 import { isNewOrganisation } from "@/lib/dashboard";
 
@@ -26,14 +27,20 @@ export default async function DashboardPage() {
 
   // De enige plek op deze pagina die weet waar de data vandaan komt. Vervang
   // de store door een databank-implementatie en alles hieronder blijft gelijk.
-  const overview = await getDashboardStore().getOverview(organisation.id);
+  //
+  // Het abonnement komt bewust níet uit die store maar uit de facturatie zelf:
+  // dat is waar het opgezegd, gewisseld en betaald wordt, en een dashboard dat
+  // daar een eigen versie van toont, is een dashboard dat je niet gelooft.
+  const [overview, subscription] = await Promise.all([
+    getDashboardStore().getOverview(organisation.id),
+    loadSubscription(organisation.id),
+  ]);
 
   const mayCreate = can(role, "project:create");
   const mayManageBilling = can(role, "billing:manage");
   const isNew = isNewOrganisation(overview);
 
-  const billingNeedsAction =
-    overview.subscription !== null && subscriptionNeedsAction(overview.subscription.status);
+  const billingNeedsAction = subscriptionNeedsAction(subscription.status);
   const failedCount = overview.projectCounts.mislukt;
 
   return (
@@ -95,7 +102,7 @@ export default async function DashboardPage() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
           <UsageCard usage={overview.usage} />
-          <SubscriptionCard subscription={overview.subscription} mayManage={mayManageBilling} />
+          <SubscriptionCard subscription={subscription} mayManage={mayManageBilling} />
           <QuickLinksCard className="sm:col-span-2 lg:col-span-1" />
         </div>
       </div>

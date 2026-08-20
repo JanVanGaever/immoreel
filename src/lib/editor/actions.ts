@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getBrandKitStore } from "@/db/brand-kit-store";
 import { getProjectStore } from "@/db/project-store";
 import { getTemplateStore } from "@/db/template-store";
 import { assertPermission } from "@/lib/auth/session";
@@ -90,7 +91,11 @@ export async function exportProjectAction(projectId: ID, presetIds: ID[]): Promi
     return { status: "fout", message: "Kies minstens één platform om naar te exporteren." };
   }
 
-  const document = toEditorDocument(project);
+  // De huisstijl komt van de server en niet uit het tabblad: wat de editor
+  // toonde kan intussen achterhaald zijn, en een render hoort de huisstijl te
+  // krijgen die er nú staat.
+  const brand = await getBrandKitStore().getBrandKit(organisation.id);
+  const document = toEditorDocument(project, brand);
 
   // Dezelfde doorrekening als in de editor, maar op wat er nú op de server
   // staat. De browser mag hier niet het laatste woord hebben: een tabblad dat

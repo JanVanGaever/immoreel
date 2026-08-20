@@ -4,6 +4,7 @@ import { FilePlus2, Film } from "lucide-react";
 import { EditorShell } from "@/components/editor/editor-shell";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getBrandKitStore } from "@/db/brand-kit-store";
 import { getProjectStore } from "@/db/project-store";
 import { getTemplateStore } from "@/db/template-store";
 import { requireSession } from "@/lib/auth/session";
@@ -22,9 +23,12 @@ export default async function EditorPage({ params }: PageProps) {
   const { projectId } = await params;
   const { organisation } = await requireSession();
 
-  const [project, templates] = await Promise.all([
+  const [project, templates, brand] = await Promise.all([
     getProjectStore().findProject(organisation.id, projectId),
     getTemplateStore().listTemplates(organisation.id),
+    // De huisstijl van het kantoor ligt over elke preview heen; ze komt mee in
+    // het document zodat de browser er niet voor terug hoeft naar de server.
+    getBrandKitStore().getBrandKit(organisation.id),
   ]);
 
   if (!project) {
@@ -52,7 +56,7 @@ export default async function EditorPage({ params }: PageProps) {
     <EditorShell
       projectId={project.id}
       status={project.status}
-      initialDocument={toEditorDocument(project)}
+      initialDocument={toEditorDocument(project, brand)}
       templates={templates}
     />
   );

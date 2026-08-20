@@ -1,5 +1,6 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { getBrandKitStore } from "@/db/brand-kit-store";
 import { getProjectStore } from "@/db/project-store";
 import { toEditorDocument } from "@/lib/editor/document";
 import { findExportPreset } from "@/lib/editor/export-presets";
@@ -163,7 +164,10 @@ async function buildPlan(data: RenderJobData, log: Logger): Promise<RenderPlan> 
     });
   }
 
-  const plan = buildRenderPlan(toEditorDocument(project), preset);
+  // De worker leest de huisstijl zelf op: hij draait los van het verzoek dat
+  // de render aanvroeg, en het kantoor kan intussen iets aangepast hebben.
+  const brand = await getBrandKitStore().getBrandKit(data.organisationId);
+  const plan = buildRenderPlan(toEditorDocument(project, brand), preset);
 
   if (plan.missingAssets.length > 0) {
     throw new RenderError("assets-missing", {

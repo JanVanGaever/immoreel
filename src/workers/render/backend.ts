@@ -1,7 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { findBrandKit } from "@/lib/editor/branding";
 import type { RenderPlan, ScenePlan } from "@/lib/editor/render-plan";
 import type { TransitionId } from "@/lib/editor/templates";
 import { RenderError } from "@/lib/render/errors";
@@ -433,12 +432,18 @@ function willReencode(plan: RenderPlan): boolean {
 
 function buildLogo(plan: RenderPlan): LogoOverlay | null {
   const fontPath = renderFontPath();
-  const kit = findBrandKit(plan.branding.brandKitId);
 
-  if (!fontPath || !kit || plan.branding.logoPlacement === "geen") return null;
+  // Drie manieren waarop er geen watermerk komt: het staat uit in de huisstijl
+  // (of in dit project), er is geen hoek gekozen, of er is geen lettertype om
+  // de initialen mee te tekenen.
+  if (!fontPath || !plan.brand.showWatermark || plan.branding.logoPlacement === "geen") {
+    return null;
+  }
 
   return {
-    initials: kit.logoInitials,
+    // TODO: het echte logobestand overlayen zodra `brand.logoUrl` in de opslag
+    // staat; tot dan tekenen we de initialen, net als in de preview.
+    initials: plan.brand.logoInitials,
     placement: plan.branding.logoPlacement,
     // Wit met een schaduw blijft leesbaar op een lichte gevel én in een donkere
     // living; de accentkleur van de kit doet dat niet.
