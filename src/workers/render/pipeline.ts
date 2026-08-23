@@ -68,7 +68,13 @@ export async function runRenderPipeline(
     let assets: Record<ID, string> = {};
 
     if (backend.needsAssets) {
-      assets = await fetchAssets(plan, { directory, signal, log, report });
+      assets = await fetchAssets(plan, {
+        directory,
+        signal,
+        log,
+        report,
+        organisationId: data.organisationId,
+      });
     } else {
       // De stap overslaan mag, hem niet melden niet: de balk zou blijven hangen
       // op het gewicht van `fetch`.
@@ -206,6 +212,8 @@ async function fetchAssets(
     signal: AbortSignal;
     log: Logger;
     report: RenderReport;
+    /** Gaat mee naar de bron: uit object storage lezen vraagt om de organisatie. */
+    organisationId: ID;
   },
 ): Promise<Record<ID, string>> {
   const source = getRenderAssetSource();
@@ -230,6 +238,7 @@ async function fetchAssets(
     // vastgelopen render nog te lezen als een tijdlijn.
     assets[scene.sceneId] = await source.fetch({
       assetId: scene.assetId,
+      organisationId: context.organisationId,
       destination: join(context.directory, `asset-${String(scene.order).padStart(3, "0")}`),
       signal: context.signal,
     });

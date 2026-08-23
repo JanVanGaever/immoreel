@@ -3,7 +3,9 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { unavailable } from "@/lib/api/errors";
 import { createLogger } from "@/lib/errors/logger";
-import { openRenderOutput, type RenderOutput } from "@/lib/exports/delivery";
+import { openRenderOutput, RenderOutputError, type RenderOutput } from "@/lib/exports/delivery";
+import { isStorageConfigured } from "@/lib/storage/config";
+import { createS3Client, StorageError } from "@/lib/storage/s3";
 import { assetSourceDir, workDir } from "@/workers/config";
 import type { ID } from "@/types";
 
@@ -95,13 +97,83 @@ export function createLocalUploadStorage(): UploadStorage {
  * blijft het bij de map op schijf — met een duidelijke 503 in plaats van
  * bestanden die stilletjes ergens anders belanden dan de worker kijkt.
  */
-export function getUploadStorage(): UploadStorage {
-  if (!process.env.STORAGE_BUCKET) return createLocalUploadStorage();
+/**
+ * Foto's in een S3-compatibele bucket.
+ *
+ * De sleutel blijft dezelfde als lokaal — `ast_ab12cd34ef56.jpg` — met een map
+ * ervoor. Dat is geen opsmuk: de renderworker zoekt straks op precies die naam
+ * (zie `createS3AssetSource()` in `src/workers/render/assets.ts`), en één
+ * afspraak over hoe een foto heet is de reden dat die twee elkaar vinden.
+ *
+ * De bucket hoort **privé** te staan. Niets in deze app heeft een publiek
+ * object nodig: elke download loopt via de app, zodat de rechtencontrole blijft
+ * staan en het bestand naar het pand heet in plaats van naar een sleutel (zie
+ * `src/lib/exports/delivery.ts`).
+ */
+export function createS3UploadStorage(): UploadStorage {
+  const client = createS3Client();
 
-  // TODO: S3-compatibele implementatie met de sleutels uit .env.example.
-  throw unavailable(
-    "Object storage is nog niet aangesloten; verwijder STORAGE_BUCKET om lokaal te schrijven.",
-  );
+  return {
+    name: "s3",
+
+    async put({ assetId, fileName, contentType, data }) {
+      // De sleutel die we bewaren is dezelfde als bij de map op schijf:
+      // `ast_ab12cd34ef56.jpg`, zonder map ervoor. Die map hoort bij de bucket
+      // en niet bij de asset — zo blijft een rij die vandaag naar de schijf
+      // wijst morgen naar de bucket wijzen zonder dat er iets in de databank
+      // hoeft te veranderen, en zo kan `open()` de sleutel nog controleren.
+      const key = `${assetId}${extensionFor(contentType, fileName)}`;
+
+      try {
+        const stored = await client.put({ key: uploadKey(key), body: data, contentType });
+
+        return { key, sizeInBytes: stored.sizeInBytes };
+      } catch (error) {
+        log.error("wegschrijven naar de bucket mislukt", error, { key });
+
+        throw unavailable("De opslag nam het bestand niet aan. Probeer het straks opnieuw.");
+      }
+    },
+
+    async open(key, contentType) {
+      if (!KEY_PATTERN.test(key)) {
+        throw unavailable("Deze opslaglocatie is onleesbaar.");
+      }
+
+      try {
+        const object = await client.get(uploadKey(key));
+
+        return {
+          stream: object.stream,
+          sizeInBytes: object.sizeInBytes,
+          // Wat wij van de asset weten wint van wat de bucket erover zegt: die
+          // waarde is bij het uploaden al tegen de lijst gelegd (zie
+          // `canonicalMimeType`), en de bucket heeft die controle niet gedaan.
+          contentType,
+        };
+      } catch (error) {
+        if (error instanceof StorageError && error.isMissing) {
+          throw new RenderOutputError("missing", "Het bestand staat niet meer in de opslag.", {
+            cause: error,
+          });
+        }
+
+        throw error;
+      }
+    },
+  };
+}
+
+/**
+ * Waar de foto's in de bucket staan. Een vaste map ervoor, zodat renders en
+ * uploads in dezelfde bucket kunnen zonder elkaars sleutels te raken.
+ */
+export function uploadKey(key: string): string {
+  return `${process.env.STORAGE_UPLOAD_PREFIX || "uploads"}/${key}`;
+}
+
+export function getUploadStorage(): UploadStorage {
+  return isStorageConfigured() ? createS3UploadStorage() : createLocalUploadStorage();
 }
 
 /**

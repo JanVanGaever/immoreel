@@ -98,7 +98,7 @@ export function TeamPanel({
         </Alert>
       ) : null}
 
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Card>
           <CardHeader>
             <div className="min-w-0">

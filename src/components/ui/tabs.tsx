@@ -98,7 +98,10 @@ export function TabsList({ className, children, ...props }: ComponentProps<"div"
       role="tablist"
       onKeyDown={handleKeyDown}
       className={cn(
-        "flex items-center gap-1 overflow-x-auto",
+        // `scroll-x`: op een smal scherm schuift de rij opzij in plaats van
+        // te breken, en de scrollbalk zelf blijft weg — die kost meer hoogte
+        // dan de tabs eronder waard zijn.
+        "scroll-x flex items-center gap-1",
         variant === "line" ? "border-b border-border" : "w-fit rounded-lg bg-surface-subtle p-1",
         className,
       )}
@@ -128,6 +131,9 @@ export function TabsTrigger({ value, className, ...props }: TabsTriggerProps) {
         "inline-flex items-center gap-2 text-sm font-medium whitespace-nowrap",
         "transition-colors duration-150 disabled:pointer-events-none disabled:opacity-55",
         "[&_svg]:size-4 [&_svg]:shrink-0",
+        // Een tab is een van de grootste knoppen op het scherm en hoort niet
+        // de kleinste te zijn om aan te tikken.
+        "min-h-[var(--control-md)]",
         variant === "line"
           ? cn(
               "-mb-px border-b-2 px-3 py-2.5",

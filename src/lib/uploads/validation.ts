@@ -30,6 +30,80 @@ export const PHOTO_UPLOAD_CONSTRAINTS: UploadConstraints = {
   label: "JPG, PNG, WebP of HEIC",
 };
 
+/**
+ * Van extensie naar het mimetype dat wij bewaren.
+ *
+ * Dit is de enige tabel die bepaalt wat er in `mimeType` van een asset
+ * terechtkomt en wat `/api/assets/:id` er als `Content-Type` weer uitstuurt.
+ * Wat de browser beweert, is een suggestie: bij een upload van een `.jpg` met
+ * `Content-Type: text/html` erbij, is die kop precies het probleem.
+ */
+const MIME_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  avif: "image/avif",
+  heic: "image/heic",
+  heif: "image/heif",
+};
+
+/**
+ * Schrijfwijzen die hetzelfde bedoelen. `image/jpg` bestaat niet volgens de
+ * standaard maar wordt door genoeg toestellen verstuurd om er geen echte foto
+ * op te weigeren.
+ */
+const MIME_ALIASES: Record<string, string> = {
+  "image/jpg": "image/jpeg",
+  "image/pjpeg": "image/jpeg",
+  "image/x-png": "image/png",
+};
+
+/** `image/JPEG; charset=binary` → `image/jpeg`. */
+export function normaliseMimeType(value: string): string {
+  const bare = value.split(";")[0]?.trim().toLowerCase() ?? "";
+
+  return MIME_ALIASES[bare] ?? bare;
+}
+
+/** Zegt de browser niets bruikbaars? Dan mag de extensie het zeggen. */
+function isGenericMimeType(value: string): boolean {
+  return value === "" || value === "application/octet-stream";
+}
+
+export function extensionOf(fileName: string): string {
+  return fileName.split(".").pop()?.toLowerCase() ?? "";
+}
+
+/**
+ * Het mimetype dat we van dit bestand bewaren, of `null` als het er geen van
+ * ons is.
+ *
+ * Nooit de waarde van de client zelf: die wordt eerst tegen de lijst gelegd en
+ * dan vervangen door onze eigen schrijfwijze. Zo kan er niets in de rij belanden
+ * wat een browser later als HTML of script zou uitvoeren, hoe de upload er ook
+ * uitzag.
+ */
+export function canonicalMimeType(
+  file: FileLike,
+  constraints: UploadConstraints = PHOTO_UPLOAD_CONSTRAINTS,
+): string | null {
+  const declared = normaliseMimeType(file.type);
+
+  if (constraints.acceptedMimeTypes.includes(declared)) return declared;
+
+  // Alleen wanneer de browser niets zegt, valt de extensie in. Dat is het
+  // HEIC-geval waarvoor die uitwijk bestaat — niet een vrijbrief om een
+  // uitdrukkelijk `text/html` binnen te laten omdat het bestand `.jpg` heet.
+  if (!isGenericMimeType(declared)) return null;
+
+  const fromExtension = MIME_BY_EXTENSION[extensionOf(file.name)];
+
+  return fromExtension && constraints.acceptedMimeTypes.includes(fromExtension)
+    ? fromExtension
+    : null;
+}
+
 /** De `accept`-waarde voor een `<input type="file">`, mimetypes én extensies. */
 export function acceptAttribute(constraints: UploadConstraints = PHOTO_UPLOAD_CONSTRAINTS): string {
   return [
@@ -50,11 +124,14 @@ export function rejectionFor(
   file: FileLike,
   constraints: UploadConstraints = PHOTO_UPLOAD_CONSTRAINTS,
 ): UploadRejection | undefined {
-  const byMimeType = constraints.acceptedMimeTypes.includes(file.type);
-  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const byExtension = constraints.acceptedExtensions.includes(extension);
-
-  if (!byMimeType && !byExtension) {
+  // Eén vraag in plaats van twee: is hier een mimetype van ons van te maken?
+  //
+  // Hiervóór stond er "mimetype **of** extensie", en die `of` was het gat: een
+  // bestand met `Content-Type: text/html` kwam erdoor zolang het maar `.jpg`
+  // heette, werd zo bewaard, en kwam er bij `/api/assets/:id` weer uit als HTML
+  // op ons eigen domein. `canonicalMimeType()` laat de extensie alleen nog het
+  // laatste woord wanneer de browser zelf niets zegt.
+  if (canonicalMimeType(file, constraints) === null) {
     return {
       fileName: file.name,
       code: "unsupported-media",

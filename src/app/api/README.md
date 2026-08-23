@@ -115,6 +115,13 @@ dan de veertig die in een pandvideo passen — komt terug in `rejected`, met de
 reden erbij; één bestand dat niet mag, maakt de andere negentien niet stuk. Zit
 er niets bruikbaars bij, dan is het een `400`.
 
+Met `?scenes=none` komen er alleen assets bij en blijft de tijdlijn zoals ze
+was. Dat is voor een client die zijn eigen scènes maakt — de editor doet dat: die
+zet de scène neer op het moment dat de foto in de sleepzone valt, zodat er een
+voortgangsbalk in de tijdlijn kan staan. Zouden wij er dan ook een maken, dan
+stond dezelfde foto er twee keer in, of overschreef de eerstvolgende autosave de
+onze. Er kan maar één eigenaar van de tijdlijn zijn; deze vlag zegt wie het is.
+
 De volgorde bewaren doe je met de volledige rij:
 
 ```json

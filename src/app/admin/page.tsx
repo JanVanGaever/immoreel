@@ -49,7 +49,7 @@ export default async function AdminOverviewPage() {
         {staffCount === 1 ? "één intern adres" : `${formatNumber(staffCount)} interne adressen`}.
       </Alert>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link href={ADMIN_ROUTES.organisations} className="rounded-xl focus-visible:outline-none">
           <Stat
             label="Kantoren"

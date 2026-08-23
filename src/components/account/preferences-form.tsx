@@ -55,7 +55,7 @@ export function PreferencesForm({ preferences }: PreferencesFormProps) {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {state.status !== "idle" && state.message ? (
         <Alert variant={state.status === "gelukt" ? "success" : "danger"} title={state.message} />
       ) : null}

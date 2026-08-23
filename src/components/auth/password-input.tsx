@@ -23,7 +23,9 @@ export function PasswordInput(props: PasswordInputProps) {
           onClick={() => setVisible((value) => !value)}
           aria-label={visible ? "Wachtwoord verbergen" : "Wachtwoord tonen"}
           title={visible ? "Wachtwoord verbergen" : "Wachtwoord tonen"}
-          className="flex items-center rounded-sm text-fg-subtle transition-colors hover:text-fg"
+          // `touch-target`: het oogje blijft even klein staan als de andere
+          // icoontjes in een veld, maar is met een duim te raken.
+          className="touch-target flex items-center rounded-sm text-fg-subtle transition-colors hover:text-fg"
         >
           {visible ? <EyeOff /> : <Eye />}
         </button>

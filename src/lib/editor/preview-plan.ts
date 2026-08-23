@@ -1,5 +1,5 @@
 import { resolveBrand } from "@/lib/brand/kit";
-import { buildTimeline, findScene, projectTransition, type EditorDocument } from "@/lib/editor/document";
+import { buildTimeline, findScene, type EditorDocument } from "@/lib/editor/document";
 import { normaliseMotion } from "@/lib/editor/motion";
 import { getTransition, templateStyle, type TransitionId } from "@/lib/editor/templates";
 import type { AspectRatio, ID, LogoPlacement, ResolvedBrand, SceneMotion } from "@/types";
@@ -136,14 +136,14 @@ export function buildPreviewPlan(document: EditorDocument): PreviewPlan {
   const style = templateStyle(document.templateId);
   const size = previewFrameSize(document.aspectRatio);
 
-  // Eén overgang voor het hele plan, precies zoals `buildTimeline()` de blokken
-  // legt. Staan de scènes niet op dezelfde overgang, dan valt de tijdlijn terug
-  // op die van het template — en dan hoort de preview dat ook te tonen.
-  const transition = projectTransition(document) ?? style.transition;
-  const overlap = getTransition(transition).durationInSeconds;
-
   const slides: PreviewSlide[] = timeline.segments.map((segment, index) => {
     const scene = findScene(document, segment.sceneId);
+
+    // De overgang van deze scène, niet die van het project. Hier stond eerder
+    // één waarde voor alle slides, met een terugval op het template zodra de
+    // scènes van elkaar verschilden — waardoor het aanpassen van één overgang
+    // in de preview niets deed terwijl de render hem wél gebruikte.
+    const transition = (scene?.transition as TransitionId | null) ?? style.transition;
 
     return {
       id: segment.id,
@@ -156,7 +156,7 @@ export function buildPreviewPlan(document: EditorDocument): PreviewPlan {
       motion: scene ? normaliseMotion(scene.motion) : STILL_MOTION,
       transition,
       // De eerste slide heeft niets om overheen te lopen.
-      transitionInSeconds: index === 0 ? 0 : overlap,
+      transitionInSeconds: index === 0 ? 0 : getTransition(transition).durationInSeconds,
       photo: scene?.source.previewUrl
         ? { url: scene.source.previewUrl, fileName: scene.source.fileName }
         : null,

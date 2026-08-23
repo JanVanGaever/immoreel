@@ -87,7 +87,7 @@ export function PlanGrid({ subscription, canManage }: PlanGridProps) {
         <Alert variant="success" title={state.message} className="mb-4" />
       ) : null}
 
-      <div className="grid items-stretch gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
         {PLAN_LIST.map((plan) => (
           <PlanCard
             key={plan.id}

@@ -14,6 +14,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const NOTICES: Record<string, string> = {
   "magic-link-ongeldig": "Die inloglink is verlopen of al gebruikt. Vraag een nieuwe aan.",
   uitgelogd: "Je bent uitgelogd.",
+  "sessie-verlopen": "Je sessie is verlopen. Log opnieuw in om verder te werken.",
   "account-verwijderd": "Je account is verwijderd. Bedankt voor het gebruik van Immoreel.",
   "e-mailadres-gewijzigd": "Je nieuwe e-mailadres is bevestigd. Log ermee in.",
   "e-mail-link-ongeldig": "Die bevestigingslink is verlopen of al gebruikt. Vraag een nieuwe aan.",

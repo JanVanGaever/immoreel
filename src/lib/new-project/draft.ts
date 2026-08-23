@@ -1,4 +1,4 @@
-import { DEFAULT_MOTION } from "@/lib/editor/motion";
+import { templateStyle } from "@/lib/editor/templates";
 import { getGoal } from "@/lib/new-project/presets";
 import type {
   AspectRatio,
@@ -7,8 +7,6 @@ import type {
   NewProjectInput,
   ProjectDraft,
   ProjectGoal,
-  Scene,
-  SceneMotion,
   Template,
 } from "@/types";
 
@@ -133,8 +131,19 @@ export function movePhoto(draft: ProjectDraft, photoId: ID, offset: number): Pro
   return touch(draft, { photos });
 }
 
-export function secondsPerPhotoFor(goal: ProjectGoal | null): number {
-  return goal ? getGoal(goal).preset.secondsPerPhoto : 3;
+/**
+ * Hoe lang elke foto in beeld blijft, volgens het gekozen template.
+ *
+ * Uit het template en niet uit het doel: het doel kiest alleen een template als
+ * vertrekpunt, en wie in stap 4 een ander template neemt, verwacht het tempo
+ * van dát template. Zonder template — een project van vóór de catalogus, of een
+ * API-verzoek zonder — geldt de standaard uit `FALLBACK_TEMPLATE_STYLE`.
+ *
+ * Dit is dezelfde bron als `syncUploads()` in de editor en
+ * `uploadProjectAssets()` op de server gebruiken. Eén getal, drie lezers.
+ */
+export function secondsPerPhotoFor(templateId: ID | null | undefined): number {
+  return templateStyle(templateId).secondsPerPhoto;
 }
 
 /** De lengte die de render ongeveer wordt; genoeg voor de samenvatting. */
@@ -144,27 +153,16 @@ export function estimateDurationInSeconds(photoCount: number, secondsPerPhoto: n
   return Math.round(photoCount * secondsPerPhoto + INTRO_OUTRO_SECONDS);
 }
 
-/**
- * De tijdlijn van het nieuwe project: één scène per foto, in de volgorde van
- * de wizard. De editor begint hier en schuift daarna zelf.
+/*
+ * Hier stond `buildScenes()`: één scène per conceptfoto, met `assetId` gelijk
+ * aan het id van de `DraftPhoto`. Dat id komt uit `createPhotoId()` in de
+ * browser en is nooit een rij in `project_assets` geworden, dus wees elke zo
+ * gemaakte scène naar een bestand dat niet bestond — een render erop brak af
+ * met `assets-missing`.
+ *
+ * De tijdlijn ontstaat nu waar de bestanden ontstaan: in
+ * `uploadProjectAssets()`, nadat de wizard de foto's geüpload heeft.
  */
-export function buildScenes(
-  photos: DraftPhoto[],
-  secondsPerPhoto: number,
-  style: { motion?: SceneMotion; transition?: string | null } = {},
-): Scene[] {
-  return photos.map((photo, index) => ({
-    id: `scn_${photo.id}`,
-    order: index,
-    assetId: photo.id,
-    durationInSeconds: secondsPerPhoto,
-    // De beweging hoort bij het template; de editor mag ze per scène wijzigen.
-    motion: style.motion ?? DEFAULT_MOTION,
-    transition: style.transition ?? null,
-    captionTop: null,
-    captionBottom: null,
-  }));
-}
 
 /**
  * Het resultaat van de wizard. `null` zolang er nog iets ontbreekt — de
@@ -180,6 +178,6 @@ export function buildNewProjectInput(draft: ProjectDraft): NewProjectInput | nul
     aspectRatio: draft.aspectRatio,
     templateId: draft.templateId,
     photos: draft.photos,
-    secondsPerPhoto: getGoal(draft.goal).preset.secondsPerPhoto,
+    secondsPerPhoto: secondsPerPhotoFor(draft.templateId),
   };
 }

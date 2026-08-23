@@ -44,6 +44,8 @@ export type ApiErrorCode = Extract<
   | "unsupported-media"
   | "too-large"
   | "conflict"
+  /** Het kantoor heeft geen lopend abonnement meer; renderen is wat dat betaalt. */
+  | "subscription-required"
   /** De dienst erachter staat er niet: geen wachtrij, geen opslag, geen sleutel. */
   | "unavailable"
   | "server-error"
@@ -137,6 +139,15 @@ export function tooLarge(message: string): ApiError {
  */
 export function conflict(message: string): ApiError {
   return new ApiError("conflict", message);
+}
+
+/**
+ * Wat de dienst kost, is niet betaald. Een 402 en geen 403: dit gaat niet over
+ * de rol van wie het vraagt maar over het abonnement van het kantoor, en het is
+ * op te lossen zonder dat iemand anders er rechten voor hoeft te geven.
+ */
+export function subscriptionRequired(message?: string): ApiError {
+  return new ApiError("subscription-required", message);
 }
 
 export function unavailable(message: string): ApiError {

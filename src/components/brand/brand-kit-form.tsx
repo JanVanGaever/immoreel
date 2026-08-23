@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { Save } from "lucide-react";
+import { BrandDiscover } from "@/components/brand/brand-discover";
 import { BrandPresets } from "@/components/brand/brand-presets";
 import { BrandPreview } from "@/components/brand/brand-preview";
 import { ColorField } from "@/components/brand/color-field";
@@ -22,6 +23,7 @@ import { FormField } from "@/components/ui/field";
 import { Form, FormActions, FormRow } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { UnsavedChangesGuard } from "@/components/ui/unsaved-changes-guard";
 import { CTA_TEXT_MAX_LENGTH, OUTRO_TEXT_MAX_LENGTH } from "@/lib/brand/validation";
 import { formatDateTime } from "@/lib/format";
 import type { BrandKit } from "@/types";
@@ -57,7 +59,17 @@ export function BrandKitForm({ kit, canManage }: BrandKitFormProps) {
   }
 
   return (
-    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      {/* Een huisstijl bewaar je met de knop, niet vanzelf zoals in de editor.
+          Dan hoort wegklikken met openstaand werk een vraag te zijn — ook bij
+          een klik op het menu, want daar merkt de browser zelf niets van. */}
+      <UnsavedChangesGuard
+        when={form.isDirty && !form.isPending}
+        title="Je huisstijl is nog niet opgeslagen"
+        description="De kleuren, teksten en gegevens die je zonet aanpaste, gaan verloren als je nu weggaat."
+        discardLabel="Weggaan zonder opslaan"
+      />
+
       <Form onSubmit={handleSubmit} noValidate className="gap-6">
         {/* Het formulier is langer dan het scherm: een fout op een veld dat
             hieronder ligt, is anders alleen te vinden door te scrollen. */}
@@ -114,6 +126,18 @@ export function BrandKitForm({ kit, canManage }: BrandKitFormProps) {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
+            {/* Boven de presets: wie zijn eigen website heeft, hoeft niet uit
+                onze kleuren te kiezen. Wat hieruit komt is een voorstel dat het
+                formulier invult — bewaren blijft een aparte klik. */}
+            {canManage ? (
+              <BrandDiscover
+                onApply={(changes, contact) => {
+                  form.set(changes);
+                  form.setContact(contact);
+                }}
+              />
+            ) : null}
+
             <BrandPresets onApply={form.applyPreset} disabled={disabled} />
 
             <FormRow>

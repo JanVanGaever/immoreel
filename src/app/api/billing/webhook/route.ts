@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/errors/logger";
 import { applyPayment } from "@/lib/billing/service";
 import { MollieError } from "@/lib/mollie/client";
-import { isMollieConfigured } from "@/lib/mollie/config";
+import { isMollieConfigured, isMolliePaymentId } from "@/lib/mollie/config";
 
 const log = createLogger("billing");
 
@@ -116,5 +116,5 @@ async function readPaymentId(request: Request): Promise<string | null> {
 
   // De vorm controleren voor we ermee naar Mollie gaan: een id met vreemde
   // tekens erin hoort niet in een URL terecht te komen.
-  return typeof raw === "string" && /^tr_[A-Za-z0-9]+$/.test(raw) ? raw : null;
+  return isMolliePaymentId(raw) ? raw : null;
 }

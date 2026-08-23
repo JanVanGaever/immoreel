@@ -10,7 +10,8 @@
     "worker": "tsx src/workers/main.ts",
     "seed": "tsx scripts/seed.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "bullmq": "^6.1.2",

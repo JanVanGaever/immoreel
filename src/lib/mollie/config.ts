@@ -31,6 +31,20 @@ export function isTestMode(): boolean {
 export const MOLLIE_API_BASE = "https://api.mollie.com/v2";
 
 /**
+ * Ziet dit eruit als een betaling-id van Mollie?
+ *
+ * De vorm controleren is geen beveiliging — het echte slot is dat we het id
+ * alleen gebruiken om de betaling bij Mollie *op te halen*, met onze eigen
+ * sleutel. Maar een id uit een URL of een webhook hoort niet ongezien in een
+ * ander adres terecht te komen, en de webhook, de terugkeerpagina en de
+ * statusroute stelden alle drie dezelfde vraag met hun eigen kopie van
+ * dezelfde reguliere expressie. Eén kopie kan niet uit de pas lopen.
+ */
+export function isMolliePaymentId(value: unknown): value is string {
+  return typeof value === "string" && /^tr_[A-Za-z0-9]+$/.test(value);
+}
+
+/**
  * De basis-URL van deze installatie.
  *
  * Mollie moet er zelf naartoe kunnen bellen, dus `localhost` werkt niet: bij

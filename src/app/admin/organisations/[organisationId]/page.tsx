@@ -180,7 +180,7 @@ export default async function AdminOrganisationPage({
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Leden" value={formatNumber(organisation.memberCount)} />
         <Stat label="Projecten" value={formatNumber(organisation.projectCount)} />
         <Stat label="Renders" value={formatNumber(detail.jobs.length)} />

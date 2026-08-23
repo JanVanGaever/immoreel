@@ -71,7 +71,7 @@ export function AccountSettings({
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="profiel" className="grid gap-4">
+      <TabsContent value="profiel" className="grid grid-cols-1 gap-4">
         <ProfileForm user={user} />
         <EmailCard user={user} pending={pendingEmail} hasPassword={hasPassword} />
 
@@ -94,7 +94,7 @@ export function AccountSettings({
         </Card>
       </TabsContent>
 
-      <TabsContent value="beveiliging" className="grid gap-4">
+      <TabsContent value="beveiliging" className="grid grid-cols-1 gap-4">
         <PasswordForm hasPassword={hasPassword} />
 
         <Alert variant="info" title="Waar je nog op kan letten">

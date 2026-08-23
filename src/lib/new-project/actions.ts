@@ -1,10 +1,8 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { getProjectStore } from "@/db/project-store";
 import { getTemplateStore } from "@/db/template-store";
 import { assertPermission } from "@/lib/auth/session";
-import { ROUTES } from "@/lib/constants";
 import type { NewProjectActionState } from "@/lib/new-project/action-state";
 import { hasErrors, validateInput } from "@/lib/new-project/validation";
 import type { NewProjectInput } from "@/types";
@@ -14,6 +12,13 @@ import type { NewProjectInput } from "@/types";
  *
  * Wat de client stuurt is een suggestie — rol, rechten en validatie gaan hier
  * opnieuw door de molen, precies zoals bij de auth-acties.
+ *
+ * Het project komt hier leeg vandaan: wel een titel, een formaat en een
+ * template, nog geen scènes. De foto's zitten op dit moment nog in de browser
+ * en gaan er in de stap hierna naartoe (`POST /api/projects/:id/assets`), en
+ * dáár ontstaat de tijdlijn. Vandaar ook dat deze actie het id teruggeeft in
+ * plaats van meteen door te sturen — wie hier `redirect()` doet, laat de
+ * gebruiker in een editor zonder foto's achter.
  */
 export async function createProjectAction(
   input: NewProjectInput,
@@ -25,7 +30,7 @@ export async function createProjectAction(
 
   if (hasErrors(fieldErrors)) {
     return {
-      status: "error",
+      status: "fout",
       message: "Er ontbreekt nog iets. Kijk de gemarkeerde stap na.",
       fieldErrors,
     };
@@ -33,6 +38,5 @@ export async function createProjectAction(
 
   const project = await getProjectStore().createProject(organisation.id, input);
 
-  // `redirect()` gooit; alles hierboven is dus al afgerond.
-  redirect(ROUTES.editor(project.id));
+  return { status: "gelukt", projectId: project.id };
 }

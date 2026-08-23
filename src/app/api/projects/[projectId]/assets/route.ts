@@ -16,6 +16,14 @@ import { listProjectAssets, uploadProjectAssets } from "@/lib/projects/assets";
  * geweigerd wordt — verkeerd formaat, te groot, meer dan de veertig die in een
  * pandvideo passen — komt terug in `rejected`, met de reden erbij. Eén
  * bestand dat niet mag, maakt de andere negentien dus niet stuk.
+ *
+ * Met `?scenes=none` blijft de tijdlijn onaangeroerd en komen er alleen assets
+ * bij. Dat is wat de editor stuurt: die heeft zijn scène al gemaakt op het
+ * moment dat de foto in de sleepzone viel. Zie `uploadProjectAssets()` voor
+ * waarom er maar één eigenaar van de tijdlijn mag zijn.
+ *
+ * De keuze staat in de URL en niet in het formulier, omdat `readFormFiles()`
+ * alleen bestanden overhoudt: een veld naast de foto's komt hier nooit aan.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +54,7 @@ export async function POST(
       userId: session.user.id,
       projectId,
       files: await readFormFiles(request),
+      attachScenes: new URL(request.url).searchParams.get("scenes") !== "none",
     });
 
     const single = assets.length === 1 ? assets[0] : null;

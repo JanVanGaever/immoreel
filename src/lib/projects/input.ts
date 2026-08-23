@@ -7,7 +7,8 @@ import { MAX_SCENE_SECONDS, MAX_SCENES, MIN_SCENE_SECONDS } from "@/lib/editor/d
 import { EASING_OPTIONS, MAX_SPEED, MIN_SPEED, MOTION_OPTIONS } from "@/lib/editor/motion";
 import { TRANSITION_OPTIONS } from "@/lib/editor/templates";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
-import { GOAL_OPTIONS, getGoal } from "@/lib/new-project/presets";
+import { secondsPerPhotoFor } from "@/lib/new-project/draft";
+import { GOAL_OPTIONS } from "@/lib/new-project/presets";
 import { MAX_PHOTOS, TITLE_MAX_LENGTH } from "@/lib/new-project/validation";
 import { PHOTO_UPLOAD_CONSTRAINTS, rejectionReason } from "@/lib/uploads/validation";
 import type { SceneInput, ProjectChanges } from "@/lib/projects/patch";
@@ -77,7 +78,7 @@ export function readNewProjectInput(body: Record<string, unknown>): NewProjectIn
     aspectRatio: aspectRatio!,
     templateId,
     photos,
-    secondsPerPhoto: secondsPerPhoto ?? getGoal(goal!).preset.secondsPerPhoto,
+    secondsPerPhoto: secondsPerPhoto ?? secondsPerPhotoFor(templateId),
   };
 }
 

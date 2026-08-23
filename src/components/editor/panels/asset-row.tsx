@@ -216,7 +216,11 @@ export function AssetRow({
           ))}
         </select>
 
-        {hasFailed ? (
+        {/* Opnieuw proberen kan alleen zolang het bestand nog in dit tabblad
+            zit (`uploadId`). Bij een scène die uit de databank komt met een
+            mislukte upload erachter is het bestand weg: dan is deze knop een
+            belofte die niets doet, en blijft alleen verwijderen over. */}
+        {hasFailed && source.uploadId ? (
           <IconButton
             label={`${source.fileName} opnieuw uploaden`}
             variant="ghost"

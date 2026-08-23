@@ -4,8 +4,7 @@ import { createAudio } from "@/lib/editor/audio";
 import { createBranding } from "@/lib/editor/branding";
 import type { ProjectPatch } from "@/lib/editor/document";
 import { defaultPresetIdsForGoal } from "@/lib/editor/export-presets";
-import { templateStyle } from "@/lib/editor/templates";
-import { buildScenes, estimateDurationInSeconds } from "@/lib/new-project/draft";
+import { estimateDurationInSeconds } from "@/lib/new-project/draft";
 import type { ID, NewProjectInput, VideoProject } from "@/types";
 
 /**
@@ -73,25 +72,34 @@ function createProjectId(): ID {
 }
 
 const memoryStore: ProjectStore = {
+  /**
+   * Het project van de wizard, nog zonder tijdlijn.
+   *
+   * De scènes ontstaan pas wanneer de foto's geüpload zijn
+   * (`uploadProjectAssets`), en dat is geen omweg maar de enige manier waarop
+   * ze naar bestaande bestanden kunnen wijzen. Eerder stonden hier scènes met
+   * `assetId: photo.id` — het id van een `DraftPhoto`, verzonnen in de browser
+   * en nergens een rij in `project_assets`. Elke render daarop liep vast op
+   * `assets-missing`.
+   *
+   * `input.photos` blijft wel meekomen: de validatie gebruikt het aantal (een
+   * video zonder foto's is geen video) en de geschatte duur zet alvast een
+   * eerlijk getal in de projectlijst.
+   */
   async createProject(organisationId, input) {
     const now = new Date().toISOString();
-    const style = templateStyle(input.templateId);
-    const scenes = buildScenes(input.photos, input.secondsPerPhoto, {
-      motion: style.motion,
-      transition: style.transition,
-    });
 
     const project: VideoProject = {
       id: createProjectId(),
       organisationId,
       propertyId: null,
       title: input.title,
-      // Er zit al media in, dus dit is geen leeg concept meer: de gebruiker
-      // gaat meteen door naar de editor.
+      // De foto's zijn gekozen en gaan zo de deur uit; dit is geen leeg
+      // concept meer, ook al staat de tijdlijn nog op het punt te ontstaan.
       status: "in-bewerking",
       aspectRatio: input.aspectRatio,
       templateId: input.templateId,
-      scenes,
+      scenes: [],
       branding: createBranding(),
       audio: createAudio(),
       // Het doel uit de wizard bepaalt welke export al aangevinkt staat, zodat
@@ -100,13 +108,13 @@ const memoryStore: ProjectStore = {
       musicAssetId: null,
       voiceoverAssetId: null,
       posterUrl: null,
+      // Een schatting, tot de upload de echte scènes neerzet en
+      // `toProjectPatch()` de duur uitrekent.
       durationInSeconds: estimateDurationInSeconds(input.photos.length, input.secondsPerPhoto),
       createdAt: now,
       updatedAt: now,
     };
 
-    // TODO: de foto's uit `input.photos` worden `MediaAsset`-rijen zodra er
-    // object storage is. De scènes verwijzen nu al naar hun toekomstige id.
     getData().set(project.id, project);
 
     return project;

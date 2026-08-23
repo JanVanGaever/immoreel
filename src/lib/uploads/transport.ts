@@ -1,7 +1,7 @@
 import { AppError } from "@/lib/errors/app-error";
 import { codeForStatus } from "@/lib/errors/catalogue";
 import { readErrorEnvelope } from "@/lib/errors/normalize";
-import type { ID, UploadAsset, UploadOrderEntry } from "@/types";
+import type { ID, UploadAsset, UploadOrderEntry, UploadRejection } from "@/types";
 
 /**
  * De poort naar de opslag.
@@ -113,6 +113,92 @@ export function createXhrTransport({
 }
 
 /**
+ * Wat er van een batch-upload terugkomt.
+ *
+ * Bewust een telling en geen lijst van assets: wie zo uploadt, gaat daarna naar
+ * een scherm dat zijn foto's toch opnieuw van de server haalt. Alleen wat er
+ * *niet* doorkwam moet mee, want dat is het enige waar de gebruiker nog iets
+ * mee moet.
+ */
+export type BatchUploadResult = {
+  uploaded: number;
+  rejected: UploadRejection[];
+};
+
+export type BatchUploadOptions = {
+  endpoint: string;
+  files: File[];
+  signal?: AbortSignal;
+  /** Voortgang over de hele batch, tussen 0 en 100. */
+  onProgress?: (percentage: number) => void;
+};
+
+/**
+ * Alle bestanden in één verzoek, met voortgang over het geheel.
+ *
+ * De tegenhanger van `createXhrTransport`, voor het geval waarin er nog geen
+ * lijst op het scherm staat om per bestand een balk in te tekenen: de laatste
+ * stap van de wizard. Daar is er één handeling — "maak dit project aan" — en
+ * dus één balk; tien losse verzoeken met tien losse balkjes zouden daar
+ * onrust suggereren waar de gebruiker maar één ding doet.
+ *
+ * Dezelfde XHR als hierboven, en om dezelfde reden: `fetch` meldt geen
+ * voortgang van een request body. Ook dezelfde foutvertaling, zodat een
+ * mislukte wizard-upload dezelfde codes geeft als een mislukte sleepzone.
+ */
+export function uploadFilesInBatch({
+  endpoint,
+  files,
+  signal,
+  onProgress,
+}: BatchUploadOptions): Promise<BatchUploadResult> {
+  return new Promise<BatchUploadResult>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Upload geannuleerd.", "AbortError"));
+      return;
+    }
+
+    const request = new XMLHttpRequest();
+    const body = new FormData();
+
+    for (const file of files) body.append("file", file, file.name);
+
+    request.open("POST", endpoint);
+    request.withCredentials = true;
+
+    request.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) onProgress?.((event.loaded / event.total) * 100);
+    });
+
+    request.addEventListener("load", () => {
+      if (request.status < 200 || request.status >= 300) {
+        reject(errorForResponse(request));
+        return;
+      }
+
+      onProgress?.(100);
+      resolve(parseBatchResponse(request.responseText));
+    });
+
+    request.addEventListener("error", () =>
+      reject(
+        new AppError(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "network", {
+          detail: `XHR error op ${endpoint}`,
+        }),
+      ),
+    );
+
+    request.addEventListener("timeout", () =>
+      reject(new AppError("timeout", { detail: `XHR timeout op ${endpoint}` })),
+    );
+
+    signal?.addEventListener("abort", () => request.abort(), { once: true });
+
+    request.send(body);
+  });
+}
+
+/**
  * Upload die niets verstuurt maar wel de tijd neemt, met voortgang die van de
  * bestandsgrootte afhangt. Hiermee is het scherm compleet te gebruiken en te
  * testen zolang de opslag er nog niet is.
@@ -196,6 +282,25 @@ function parseResponse(responseText: string): UploadResult {
     // Een antwoord dat geen JSON is, betekent niet dat de upload mislukt is.
     return {};
   }
+}
+
+/**
+ * Het antwoord van de assetroute op een batch.
+ *
+ * Wat er niet in staat of niet klopt, wordt een lege lijst: een antwoord dat we
+ * niet kunnen lezen betekent niet dat de upload mislukt is — de bestanden staan
+ * er dan wél, en de editor haalt ze zo op.
+ */
+function parseBatchResponse(responseText: string): BatchUploadResult {
+  const payload = parseJson(responseText);
+  if (!payload || typeof payload !== "object") return { uploaded: 0, rejected: [] };
+
+  const { assets, rejected } = payload as Record<string, unknown>;
+
+  return {
+    uploaded: Array.isArray(assets) ? assets.length : 0,
+    rejected: Array.isArray(rejected) ? (rejected as UploadRejection[]) : [],
+  };
 }
 
 /**

@@ -55,7 +55,8 @@ export function Switch({
         disabled={disabled}
         onClick={toggle}
         className={cn(
-          "relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full",
+          // `touch-target`: het schuifje blijft klein, het aanraakgebied niet.
+          "touch-target mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full",
           "transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-55",
           isOn ? "bg-brand" : "bg-border-strong",
         )}

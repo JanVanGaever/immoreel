@@ -58,7 +58,13 @@ export const API_ROUTES = {
   project: (projectId: string) => `/api/projects/${projectId}`,
   /** Alles wat over de video als geheel gaat: formaat, template, huisstijl, muziek. */
   projectSettings: (projectId: string) => `/api/projects/${projectId}/settings`,
-  projectAssets: (projectId: string) => `/api/projects/${projectId}/assets`,
+  /**
+   * De foto's van een project. `scenes: "none"` uploadt alleen de bestanden en
+   * laat de tijdlijn met rust — dat is wat de editor nodig heeft, want die
+   * maakt zijn scènes zelf zodra een foto in de sleepzone valt.
+   */
+  projectAssets: (projectId: string, options?: { scenes?: "none" }) =>
+    `/api/projects/${projectId}/assets${options?.scenes === "none" ? "?scenes=none" : ""}`,
   /** De volledige volgorde van de foto's bewaren. */
   projectAssetOrder: (projectId: string) => `/api/projects/${projectId}/assets/order`,
   /** Het bestand van één foto; de opslag zelf is niet publiek. */
@@ -70,6 +76,12 @@ export const API_ROUTES = {
   /** De exports van een project met hun downloadlinks. */
   projectExports: (projectId: string) => `/api/projects/${projectId}/exports`,
   brandKit: "/api/brand-kit",
+  /** Een huisstijl voorstellen op basis van de website van het kantoor. */
+  brandKitDiscover: "/api/brand-kit/discover",
+  /** Het logo van dat voorstel overnemen in onze eigen opslag. */
+  brandKitLogoImport: "/api/brand-kit/discover/logo",
+  /** Het logobestand zelf; de opslag is niet publiek. */
+  brandKitLogo: (key: string) => `/api/brand-kit/logo/${key}`,
   /** Abonnement, plan en verbruik in één antwoord. */
   billingStatus: "/api/billing/status",
   exportDownload: (projectId: string, jobId: string) =>

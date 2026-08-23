@@ -30,10 +30,27 @@ export const AUTH_ROUTES = {
   invite: "/invite",
   /** Route handler: het nieuwe e-mailadres bevestigen vanuit de mail. */
   emailChange: "/email-change",
+  /**
+   * Route handler: een sessiecookie opruimen dat nergens meer naar wijst.
+   *
+   * Het cookie is ondertekend en nog niet verlopen, maar de gebruiker erachter
+   * bestaat niet meer. De proxy ziet dan "ingelogd" en de layout ziet
+   * "niet ingelogd", en die twee sturen elkaar eindeloos heen en weer. Zie
+   * `requireSession()`.
+   */
+  sessionExpired: "/session-expired",
 } as const;
 
-/** Routes die zonder sessie bereikbaar zijn. */
-export const PUBLIC_ROUTES: readonly string[] = Object.values(AUTH_ROUTES);
+/**
+ * Routes die zonder sessie bereikbaar zijn.
+ *
+ * `/` hoort erbij: dat is de voordeur. Ze stuurt zelf door naar het dashboard
+ * (`src/app/page.tsx`), en dát is de route die om een sessie vraagt. Stond ze
+ * er niet bij, dan werd een uitgelogde bezoeker begroet met
+ * `/login?redirectTo=%2F` — een bestemming die na het inloggen toch weer
+ * doorstuurt.
+ */
+export const PUBLIC_ROUTES: readonly string[] = [...Object.values(AUTH_ROUTES), "/"];
 
 /**
  * Routes die geen zin hebben als je al ingelogd bent. Herstellink, magic link

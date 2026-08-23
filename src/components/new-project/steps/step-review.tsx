@@ -21,12 +21,12 @@ export type StepReviewProps = {
  */
 export function StepReview({ draft, templates }: StepReviewProps) {
   const template = templates.find((item) => item.id === draft.templateId);
-  const secondsPerPhoto = secondsPerPhotoFor(draft.goal);
+  const secondsPerPhoto = secondsPerPhotoFor(draft.templateId);
   const duration = estimateDurationInSeconds(draft.photos.length, secondsPerPhoto);
 
   return (
     <div className="flex flex-col gap-4">
-      <dl className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+      <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
         <SummaryRow icon={<Type />} label="Naam" value={draft.title.trim() || "—"} />
         <SummaryRow
           icon={<Target />}

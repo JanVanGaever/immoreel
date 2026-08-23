@@ -90,6 +90,7 @@ export type AppErrorCode =
   | "payment-not-found"
   | "mandate-missing"
   | "plan-unavailable"
+  | "subscription-required"
   // systeem
   | "not-found"
   | "conflict"

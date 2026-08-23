@@ -2,6 +2,7 @@ import { getProjectAssetStore } from "@/db/project-asset-store";
 import { handle, notFound, requireApiSession } from "@/lib/api";
 import { RenderOutputError } from "@/lib/exports/delivery";
 import { getUploadStorage } from "@/lib/uploads/storage";
+import { PHOTO_UPLOAD_CONSTRAINTS, normaliseMimeType } from "@/lib/uploads/validation";
 
 /**
  * Het bestand van één geüploade foto.
@@ -31,13 +32,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
     // geven, en dat is hetzelfde als niet bestaan.
     if (!asset?.storageKey) throw notFound("Onbekende foto.");
 
+    // De rij zegt wat er ooit geüpload is; deze lijst zegt wat we bereid zijn
+    // terug te sturen. Dat zijn twee dingen, en ze hier weer samen laten vallen
+    // is precies hoe een foto een stuk HTML op ons eigen domein werd. Rijen van
+    // vóór deze controle kunnen nog een ander mimetype dragen: die krijgen een
+    // download in plaats van een weergave.
+    const contentType = isServableImage(asset.mimeType) ? asset.mimeType : null;
+
     try {
-      const output = await getUploadStorage().open(asset.storageKey, asset.mimeType);
+      const output = await getUploadStorage().open(
+        asset.storageKey,
+        contentType ?? "application/octet-stream",
+      );
 
       const headers = new Headers({
-        "Content-Type": output.contentType,
-        // Inline: dit is een voorbeeld in een uploadlijst, geen download.
-        "Content-Disposition": "inline",
+        "Content-Type": contentType ?? "application/octet-stream",
+        // Inline: dit is een voorbeeld in een uploadlijst, geen download. Alleen
+        // voor beeld dat we vertrouwen; al de rest wordt bewust weggeschreven
+        // in plaats van getoond.
+        "Content-Disposition": contentType ? "inline" : "attachment",
+        // Zonder dit mag de browser zelf raden wat dit bestand is, en dan is een
+        // `Content-Type` die we net zorgvuldig gekozen hebben niets meer waard.
+        "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, max-age=86400",
       });
 
@@ -57,4 +73,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
       throw error;
     }
   });
+}
+
+/**
+ * Mogen we dit type inline terugsturen?
+ *
+ * Alleen de beeldformaten die de uploadzone ook accepteert. Alles daarbuiten —
+ * een rij van vóór deze controle, of iets wat later via een ander pad
+ * binnenkomt — wordt een download met `application/octet-stream`, want een
+ * onbekend type inline serveren is hoe een upload zich voordoet als een pagina.
+ */
+function isServableImage(mimeType: string): boolean {
+  return PHOTO_UPLOAD_CONSTRAINTS.acceptedMimeTypes.includes(normaliseMimeType(mimeType));
 }

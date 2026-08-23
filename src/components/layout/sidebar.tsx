@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
@@ -80,6 +81,40 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const panelRef = useRef<HTMLElement>(null);
+  /** De knop waarmee het paneel geopend werd; daar hoort de focus straks terug. */
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  /**
+   * Hetzelfde gedrag als `<Modal>`: Escape sluit, de achtergrond schuift niet
+   * mee, en de focus gaat het paneel in en daarna terug naar de knop. Zonder
+   * dat laatste belandt de tabvolgorde na het sluiten weer bovenaan de pagina.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.querySelector<HTMLElement>("a, button")?.focus();
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      openerRef.current?.focus();
+    };
+  }, [open, onClose]);
+
   return (
     <>
       {/* Desktop: vast in beeld */}
@@ -108,6 +143,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           )}
         />
         <aside
+          ref={panelRef}
+          aria-label="Hoofdnavigatie"
           className={cn(
             "absolute inset-y-0 left-0 w-[var(--sidebar-width)] border-r border-border bg-surface-subtle",
             "shadow-elevated transition-transform duration-200 ease-out",

@@ -65,12 +65,23 @@ export const getSession = cache(async (): Promise<Session | null> => {
   };
 });
 
-/** Voor pagina's en layouts die zonder sessie niets te tonen hebben. */
+/**
+ * Voor pagina's en layouts die zonder sessie niets te tonen hebben.
+ *
+ * Wie hier zonder sessie komt maar mét een cookie, gaat eerst langs
+ * `/session-expired`. Dat lijkt een omweg en is het niet: de proxy vindt zo'n
+ * cookie geldig — ze kijkt alleen naar de handtekening — en stuurt ons vanaf
+ * `/login` regelrecht terug naar de pagina die ons zonet wegstuurde. Die route
+ * gooit het cookie weg, en pas dán heeft het inlogscherm zin. Een
+ * servercomponent mag zelf geen cookies wissen; een route handler wel.
+ */
 export async function requireSession(): Promise<Session> {
   const session = await getSession();
-  if (!session) redirect(AUTH_ROUTES.login);
+  if (session) return session;
 
-  return session;
+  const cookieStore = await cookies();
+
+  redirect(cookieStore.has(SESSION_COOKIE) ? AUTH_ROUTES.sessionExpired : AUTH_ROUTES.login);
 }
 
 /**

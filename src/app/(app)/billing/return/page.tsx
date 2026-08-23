@@ -4,6 +4,7 @@ import { PaymentResult } from "@/components/billing/payment-result";
 import { PageHeader } from "@/components/layout/page-header";
 import { requirePermission } from "@/lib/auth/session";
 import { ROUTES } from "@/lib/constants";
+import { isMolliePaymentId } from "@/lib/mollie/config";
 import { firstSearchParam } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Betaling" };
@@ -31,7 +32,7 @@ export default async function BillingReturnPage({ searchParams }: PageProps) {
 
   // Zonder betaling-id valt er niets te tonen. Dit gebeurt als iemand het adres
   // los intypt of als een terugkeer-URL onderweg gehavend raakt.
-  if (!paymentId || !/^tr_[A-Za-z0-9]+$/.test(paymentId)) redirect(ROUTES.billing);
+  if (!isMolliePaymentId(paymentId)) redirect(ROUTES.billing);
 
   return (
     <div className="mx-auto w-full max-w-xl">

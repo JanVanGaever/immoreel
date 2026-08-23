@@ -1,7 +1,9 @@
 import { revalidatePath } from "next/cache";
 import { getBrandKitStore } from "@/db/brand-kit-store";
 import { getProjectStore } from "@/db/project-store";
-import { conflict, invalidInput, unavailable } from "@/lib/api/errors";
+import { conflict, invalidInput, subscriptionRequired, unavailable } from "@/lib/api/errors";
+import { loadSubscription } from "@/lib/billing/service";
+import { hasBillingAccess } from "@/lib/billing/status";
 import { ROUTES } from "@/lib/constants";
 import type { ExportRequest } from "@/lib/editor/action-state";
 import { toEditorDocument } from "@/lib/editor/document";
@@ -47,6 +49,24 @@ export async function startRenders(input: StartRendersInput): Promise<StartRende
     throw invalidInput("Kies minstens één platform om naar te exporteren.");
   }
 
+  // Renderen is de dienst waarvoor betaald wordt, en dit is de enige plek waar
+  // een render begint — de exportknop in de editor en `POST .../renders` komen
+  // er allebei langs. De controle hoort dus hier en niet in een van de twee.
+  //
+  // `loadSubscription()` en niet `getSubscription()`: die eerste haalt de klok
+  // erdoorheen, zodat een proefperiode die gisteren afliep vandaag ook echt
+  // afgelopen is. Anders blijft een kantoor renderen tot iemand toevallig de
+  // facturatiepagina opent.
+  //
+  // Alleen `opgezegd` wordt geweigerd. Achterstallig niet, en waarom niet staat
+  // bij `hasBillingAccess()`: een mislukte incasso is bijna altijd een kaart die
+  // verlopen is, en wie daardoor midden op de dag zijn video niet af krijgt,
+  // belt niet de bank maar zegt op.
+  const subscription = await loadSubscription(input.organisationId);
+  if (!hasBillingAccess(subscription.status)) throw subscriptionRequired();
+
+  // Pas hierna de infrastructuur. Wie geen abonnement heeft, hoort niet te
+  // lezen dat ónze wachtrij niet ingesteld staat.
   if (!isQueueConfigured()) {
     throw unavailable(
       "De renderwachtrij is niet geconfigureerd. Zet REDIS_URL en start de worker.",

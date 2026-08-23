@@ -255,6 +255,15 @@ const CATALOGUE: Record<AppErrorCode, ErrorEntry> = {
     retry: NONE,
     status: 409,
   },
+  "subscription-required": {
+    domain: "billing",
+    severity: "warning",
+    message: "Er loopt geen abonnement voor dit kantoor.",
+    hint: "Kies een plan op de facturatiepagina; je projecten en foto's blijven staan.",
+    // Opnieuw proberen verandert hier niets: er moet iemand een plan kiezen.
+    retry: NONE,
+    status: 402,
+  },
 
   /* ---- systeem ------------------------------------------------------- */
   "not-found": {

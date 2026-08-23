@@ -20,7 +20,7 @@ export function DetailList({ items, columns = 2 }: { items: DetailItem[]; column
   return (
     <dl
       className={cn(
-        "grid gap-x-6 gap-y-4 sm:grid-cols-2",
+        "grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2",
         columns === 3 && "lg:grid-cols-3",
         columns === 4 && "lg:grid-cols-4",
       )}

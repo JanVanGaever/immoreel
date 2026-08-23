@@ -18,6 +18,7 @@ export { MollieError, mollieRequest } from "@/lib/mollie/client";
 export {
   appBaseUrl,
   isMollieConfigured,
+  isMolliePaymentId,
   isPubliclyReachable,
   isTestMode,
   mollieLocale,

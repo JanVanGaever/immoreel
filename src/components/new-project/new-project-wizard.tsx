@@ -16,7 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Meter } from "@/components/ui/meter";
 import { Steps } from "@/components/ui/steps";
-import { DEFAULT_LOCALE, DEFAULT_TIMEZONE, ROUTES } from "@/lib/constants";
+import { API_ROUTES, DEFAULT_LOCALE, DEFAULT_TIMEZONE, ROUTES } from "@/lib/constants";
+import { toAppError } from "@/lib/errors/normalize";
+import { uploadFilesInBatch } from "@/lib/uploads/transport";
 import { initialNewProjectState, type NewProjectActionState } from "@/lib/new-project/action-state";
 import { createProjectAction } from "@/lib/new-project/actions";
 import { buildNewProjectInput } from "@/lib/new-project/draft";
@@ -89,6 +91,8 @@ export function NewProjectWizard({ templates }: NewProjectWizardProps) {
   /** Pas na een poging tot verdergaan tonen we meldingen; niet tijdens het typen. */
   const [showErrors, setShowErrors] = useState(false);
   const [serverState, setServerState] = useState<NewProjectActionState>(initialNewProjectState);
+  /** Percentage van de foto-upload, of `null` zolang die niet loopt. */
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const step = stepAt(current);
@@ -143,6 +147,21 @@ export function NewProjectWizard({ templates }: NewProjectWizardProps) {
     createProject();
   }
 
+  /**
+   * Van concept naar editor, in drie stappen die in deze volgorde moeten.
+   *
+   * 1. **Het project aanmaken.** Dat levert het id waar de foto's naartoe
+   *    kunnen; eerder is er niets om ze aan te hangen.
+   * 2. **De foto's uploaden.** Ze zitten tot hier alleen in dit tabblad
+   *    (`controller.files()`), en een `File` overleeft geen navigatie. Wie hier
+   *    eerst doorstuurt, laat ze achter. De tijdlijn ontstaat aan de serverkant
+   *    uit deze upload — vandaar geen `?scenes=none`.
+   * 3. **Pas dan naar de editor.**
+   *
+   * Loopt stap 2 mis, dan blijft de gebruiker hier staan met een melding en
+   * zijn foto's nog in het scherm: opnieuw proberen kost hem dan één klik in
+   * plaats van opnieuw twintig bestanden kiezen.
+   */
   function createProject() {
     const input = buildNewProjectInput(draft);
 
@@ -151,19 +170,47 @@ export function NewProjectWizard({ templates }: NewProjectWizardProps) {
       return;
     }
 
-    // Het concept wordt nu een project; loopt het aanmaken toch mis, dan
-    // zetten we het bewaarde concept meteen terug.
-    controller.forget();
+    const files = controller.files();
 
     startTransition(async () => {
+      setServerState(initialNewProjectState);
+      setUploadProgress(null);
+
       const result = await createProjectAction(input);
 
-      if (result?.status === "error") {
+      if (result.status === "fout") {
         setServerState(result);
-        // Het concept staat weer alleen in de browser; meteen terugzetten.
-        controller.saveNow();
         jumpToFirstError(result.fieldErrors ?? {});
+        return;
       }
+
+      if (result.status !== "gelukt") return;
+
+      try {
+        setUploadProgress(0);
+
+        await uploadFilesInBatch({
+          endpoint: API_ROUTES.projectAssets(result.projectId),
+          files,
+          onProgress: setUploadProgress,
+        });
+      } catch (cause) {
+        // Het project bestaat nu wel en de foto's niet. De gebruiker mag niet
+        // in een lege editor belanden zonder te weten waarom.
+        const failure = toAppError(cause, { fallback: "upload-failed" });
+
+        setServerState({
+          status: "fout",
+          message: `Het project is aangemaakt, maar de foto's raakten niet geüpload. ${failure.message}`,
+        });
+        setUploadProgress(null);
+
+        return;
+      }
+
+      // Vanaf hier is alles binnen: het bewaarde concept mag weg.
+      controller.forget();
+      router.push(ROUTES.editor(result.projectId));
     });
   }
 
@@ -234,7 +281,7 @@ export function NewProjectWizard({ templates }: NewProjectWizardProps) {
                 andere fouten staan dan op stappen die je niet ziet. Vandaar de
                 volledige lijst hier: zonder dat lijkt de wizard klaar zodra dit
                 ene veld goed staat. */}
-            {serverState.status === "error" && serverState.message ? (
+            {serverState.status === "fout" ? (
               <ErrorSummary
                 error={serverState.message}
                 fields={serverState.fieldErrors}
@@ -302,7 +349,21 @@ export function NewProjectWizard({ templates }: NewProjectWizardProps) {
             </div>
 
             <div className="flex items-center gap-3">
-              {savedLabel ? (
+              {/* Zodra de foto's de deur uit gaan, vervangt de balk het
+                  bewaarlabel: het concept doet er dan niet meer toe, en een
+                  upload van veertig foto's is te lang om alleen een draaiend
+                  wieltje voor te tonen. */}
+              {uploadProgress !== null ? (
+                <Meter
+                  className="hidden min-w-40 sm:block"
+                  value={uploadProgress}
+                  max={100}
+                  size="sm"
+                  label="Foto's uploaden"
+                  valueLabel={`${Math.round(uploadProgress)} %`}
+                  srLabel="Voortgang van de upload"
+                />
+              ) : savedLabel ? (
                 <span className="hidden text-xs text-fg-subtle sm:inline">
                   Concept bewaard om {savedLabel}
                 </span>
@@ -311,7 +372,9 @@ export function NewProjectWizard({ templates }: NewProjectWizardProps) {
               <Button
                 type="submit"
                 isLoading={isPending}
-                loadingLabel="Project wordt aangemaakt"
+                loadingLabel={
+                  uploadProgress === null ? "Project wordt aangemaakt" : "Foto's worden geüpload"
+                }
                 className="w-full sm:w-auto"
               >
                 {isLastStep(current) ? (

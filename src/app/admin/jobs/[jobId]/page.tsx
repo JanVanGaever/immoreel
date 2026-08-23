@@ -166,7 +166,7 @@ export default async function AdminJobPage({ params }: { params: Promise<{ jobId
         </Card>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Tijdlijn</CardTitle>

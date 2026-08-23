@@ -1,6 +1,11 @@
 import { copyFile, readdir, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
+import { Readable } from "node:stream";
+import { getProjectAssetStore } from "@/db/project-asset-store";
 import { RenderError } from "@/lib/render/errors";
+import { isStorageConfigured } from "@/lib/storage/config";
+import { createS3Client, StorageError } from "@/lib/storage/s3";
+import { uploadKey } from "@/lib/uploads/storage";
 import { assetBaseUrl, assetSourceDir } from "@/workers/config";
 import type { ID } from "@/types";
 
@@ -20,6 +25,12 @@ import type { ID } from "@/types";
 
 export type FetchAssetInput = {
   assetId: ID;
+  /**
+   * Het kantoor waar deze foto bij hoort. De bron die uit object storage leest,
+   * zoekt de rij op om aan de opslagsleutel te komen, en een asset opzoeken
+   * gebeurt in deze app nooit zonder organisatie erbij.
+   */
+  organisationId: ID;
   /** Pad zonder extensie; de bron kiest de extensie van het bestand zelf. */
   destination: string;
   signal: AbortSignal;
@@ -109,9 +120,67 @@ export function createHttpAssetSource(baseUrl: string): RenderAssetSource {
  * Welke bron er draait. Een map op schijf wint van een URL: staat ze ingesteld,
  * dan is dat een bewuste keuze van wie de worker start.
  */
+/**
+ * Foto's uit de S3-compatibele bucket waar de uploads in staan.
+ *
+ * De sleutel wordt niet geraden maar opgezocht: `project_assets` weet welke
+ * `storageKey` bij deze asset hoort. Dat scheelt een zoekopdracht in de bucket
+ * per foto, en het is de enige manier om zeker te weten dat de render dezelfde
+ * bytes krijgt als wat de makelaar geüpload heeft — een bestandsnaam raden op
+ * extensie is een gok die bij één iPhone-foto in de veertig misgaat.
+ */
+export function createS3AssetSource(): RenderAssetSource {
+  const client = createS3Client();
+
+  return {
+    name: "s3",
+
+    async fetch({ assetId, organisationId, destination }) {
+      const asset = await getProjectAssetStore().findAsset(organisationId, assetId);
+
+      if (!asset?.storageKey) {
+        // Geen rij of geen sleutel: de upload is nooit afgerond. Bij poging drie
+        // is dat niet anders.
+        throw new RenderError("assets-missing", {
+          stage: "fetch",
+          detail: `Geen opslagsleutel voor asset ${assetId}.`,
+        });
+      }
+
+      const key = uploadKey(asset.storageKey);
+      const target = `${destination}${extname(asset.storageKey).toLowerCase() || ".jpg"}`;
+
+      try {
+        const object = await client.get(key);
+
+        // Naar schijf en niet naar het geheugen: FFmpeg leest liever van schijf,
+        // en veertig foto's in het geheugen naast een lopende render is vragen om
+        // problemen.
+        await writeFile(target, Readable.fromWeb(object.stream as never));
+
+        return target;
+      } catch (error) {
+        if (error instanceof StorageError && error.isMissing) {
+          throw new RenderError("assets-missing", {
+            stage: "fetch",
+            detail: `${key} staat niet in de opslag.`,
+            cause: error,
+          });
+        }
+
+        throw new RenderError("asset-download", { stage: "fetch", detail: key, cause: error });
+      }
+    },
+  };
+}
+
 export function getRenderAssetSource(): RenderAssetSource {
+  // Een map op schijf wint nog steeds: wie `RENDER_ASSET_DIR` zet, doet dat
+  // bewust om met eigen bestanden te draaien.
   const directory = assetSourceDir();
   if (directory) return createLocalAssetSource(directory);
+
+  if (isStorageConfigured()) return createS3AssetSource();
 
   const baseUrl = assetBaseUrl();
   if (baseUrl) return createHttpAssetSource(baseUrl);

@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonClasses } from "@/components/ui/button";
+import { buttonClasses } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -58,7 +58,7 @@ export default async function SettingsPage() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <div>
@@ -66,21 +66,22 @@ export default async function SettingsPage() {
               <CardDescription>Gegevens van je kantoor.</CardDescription>
             </div>
           </CardHeader>
+          {/* `readOnly` en niet gewoon een uitgeschakelde knop: zolang er geen
+              serveractie achter zit, is een veld waarin je kan typen een
+              belofte die we niet nakomen. Wie hier zijn btw-nummer aanpast en
+              wegklikt, denkt dat het bewaard is. Lezen mag, typen nog niet. */}
           <CardContent className="space-y-4">
-            <FormField label="Naam" disabled={!mayManageOrganisation}>
-              <Input defaultValue={organisation.name} placeholder="Vastgoedkantoor Janssens" />
+            <FormField label="Naam">
+              <Input value={organisation.name} readOnly />
             </FormField>
-            <FormField
-              label="Btw-nummer"
-              hint="Verschijnt op je facturen."
-              disabled={!mayManageOrganisation}
-            >
-              <Input defaultValue={organisation.vatNumber ?? ""} placeholder="BE0123.456.789" />
+            <FormField label="Btw-nummer" hint="Verschijnt op je facturen.">
+              <Input value={organisation.vatNumber ?? "—"} readOnly />
             </FormField>
           </CardContent>
           <CardFooter>
-            <Button disabled>Opslaan</Button>
-            <span className="text-xs text-fg-subtle">Nog niet aangesloten</span>
+            <span className="text-xs text-fg-subtle">
+              Aanpassen kan nog niet — mail {SUPPORT_EMAIL} om deze gegevens te laten wijzigen.
+            </span>
           </CardFooter>
         </Card>
 

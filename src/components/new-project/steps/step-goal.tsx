@@ -4,6 +4,7 @@ import { OptionCard, OptionGrid } from "@/components/new-project/option-card";
 import { Badge } from "@/components/ui/badge";
 import { FieldError } from "@/components/ui/field";
 import { formatNumber } from "@/lib/format";
+import { secondsPerPhotoFor } from "@/lib/new-project/draft";
 import { GOAL_OPTIONS } from "@/lib/new-project/presets";
 import type { ProjectGoal } from "@/types";
 
@@ -40,7 +41,8 @@ export function StepGoal({ goal, error, onSelect }: StepGoalProps) {
             }
             media={
               <span className="text-[0.6875rem] font-medium tracking-wide text-fg-subtle uppercase">
-                {option.preset.aspectRatio} · scènes van {formatNumber(option.preset.secondsPerPhoto)} s
+                {option.preset.aspectRatio} · scènes van{" "}
+                {formatNumber(secondsPerPhotoFor(option.preset.templateId))} s
               </span>
             }
           />

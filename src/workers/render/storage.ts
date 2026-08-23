@@ -1,7 +1,11 @@
+import { createReadStream } from "node:fs";
 import { copyFile, mkdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { RenderError } from "@/lib/render/errors";
+import { isStorageConfigured } from "@/lib/storage/config";
+import { createS3Client } from "@/lib/storage/s3";
 import { workDir } from "@/workers/config";
 
 /**
@@ -57,12 +61,46 @@ export function createLocalStorage(): RenderStorage {
  * De echte opslag: het bucket uit `STORAGE_BUCKET`. Zolang die er niet is,
  * blijft het bij de map op schijf.
  */
-export function getRenderStorage(): RenderStorage {
-  if (!process.env.STORAGE_BUCKET) return createLocalStorage();
+/**
+ * De afgewerkte video naar een S3-compatibele bucket.
+ *
+ * Het bestand gaat er als stroom in en niet als buffer: een render van
+ * tweehonderd megabyte hoort geen tweehonderd megabyte serverheugen te kosten,
+ * en de worker draait er misschien twee tegelijk.
+ *
+ * De sleutel komt van de job en is dus afgeleid van het renderplan. Twee
+ * workers die hetzelfde gerenderd hebben, schrijven daardoor naar dezelfde
+ * plek — dat is de laatste schakel van de idempotentie, en hij blijft precies
+ * hetzelfde werken als bij de map op schijf.
+ */
+export function createS3RenderStorage(): RenderStorage {
+  const client = createS3Client();
 
-  // TODO: S3-compatibele implementatie met de sleutels uit .env.example.
-  throw new RenderError("storage", {
-    stage: "publish",
-    detail: "Object storage is nog niet aangesloten; verwijder STORAGE_BUCKET om lokaal te schrijven.",
-  });
+  return {
+    name: "s3",
+
+    async put({ key, path, contentType }) {
+      const target = renderKey(key);
+
+      try {
+        const info = await stat(path);
+        const stream = Readable.toWeb(createReadStream(path)) as ReadableStream<Uint8Array>;
+
+        await client.put({ key: target, body: stream, contentType, sizeInBytes: info.size });
+
+        return { key: target, url: client.urlFor(target), sizeInBytes: info.size };
+      } catch (error) {
+        throw new RenderError("storage", { stage: "publish", detail: target, cause: error });
+      }
+    },
+  };
+}
+
+/** Waar de renders in de bucket staan, gescheiden van de uploads. */
+export function renderKey(key: string): string {
+  return `${process.env.STORAGE_RENDER_PREFIX || "renders"}/${key}`;
+}
+
+export function getRenderStorage(): RenderStorage {
+  return isStorageConfigured() ? createS3RenderStorage() : createLocalStorage();
 }

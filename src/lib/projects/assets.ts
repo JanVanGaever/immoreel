@@ -4,9 +4,8 @@ import { templateStyle } from "@/lib/editor/templates";
 import { loadOwnProject, saveProjectChanges } from "@/lib/projects/service";
 import type { SceneInput } from "@/lib/projects/patch";
 import { getUploadStorage } from "@/lib/uploads/storage";
-import { partitionFiles, PHOTO_UPLOAD_CONSTRAINTS } from "@/lib/uploads/validation";
+import { canonicalMimeType, partitionFiles, PHOTO_UPLOAD_CONSTRAINTS } from "@/lib/uploads/validation";
 import { MAX_PHOTOS } from "@/lib/new-project/validation";
-import { secondsPerPhotoFor } from "@/lib/new-project/draft";
 import type { ID, ProjectAsset, Scene, UploadRejection, VideoProject } from "@/types";
 
 /**
@@ -45,20 +44,38 @@ export async function listProjectAssets(
 }
 
 /**
- * Foto's uploaden en er scènes van maken.
+ * Foto's uploaden, en er desgevraagd scènes van maken.
  *
  * De volgorde van de stappen doet ertoe. Eerst de rij in de store (die geeft
  * het id, en daarmee de sleutel in de opslag), dan pas de bytes. Gaat het
  * wegschrijven mis, dan wordt de rij weer weggehaald: een asset zonder bestand
  * is een render die straks afbreekt op een foto die er nooit was.
+ *
+ * **`attachScenes` bestaat omdat er maar één eigenaar van de tijdlijn mag
+ * zijn.** Een asset is een bestand, een scène is een blok in de tijdlijn dat
+ * ernaar wijst — en wie dat blok maakt, verschilt per beller:
+ *
+ * - **De editor maakt zijn scène zelf**, op het moment dat de foto in de
+ *   sleepzone valt en dus lang voor de bytes binnen zijn. Zo kan de tijdlijn
+ *   "uploaden, 43 %" tonen (zie `SceneSource` in `lib/editor/document.ts`).
+ *   Zou deze functie er dan óók een maken, dan staat dezelfde foto twee keer in
+ *   de tijdlijn — of overschrijft de eerstvolgende autosave onze scène weer,
+ *   want `saveProjectPatch()` bewaart de volledige lijst. Welke van de twee, is
+ *   een kwestie van wie het eerst klaar is. De editor stuurt daarom
+ *   `?scenes=none`.
+ * - **De wizard en een kaal API-verzoek hebben geen editor** die scènes maakt.
+ *   Daar is `attachScenes` juist het hele punt: foto's uploaden naar een leeg
+ *   project hoort een tijdlijn op te leveren. Dat is de standaard.
  */
 export async function uploadProjectAssets(input: {
   organisationId: ID;
   userId: ID;
   projectId: ID;
   files: File[];
+  /** Standaard `true`; de editor zet hem uit, want die maakt zijn scènes zelf. */
+  attachScenes?: boolean;
 }): Promise<UploadResult> {
-  const { organisationId, projectId, userId } = input;
+  const { organisationId, projectId, userId, attachScenes = true } = input;
 
   if (input.files.length === 0) {
     throw invalidInput("Er zat geen enkel bestand in dit verzoek.");
@@ -87,13 +104,20 @@ export async function uploadProjectAssets(input: {
 
   try {
     for (const file of accepted) {
+      // Niet `file.type`: dat is wat de browser beweert, en die bewering hoort
+      // niet in een rij die later een `Content-Type` wordt. `partitionFiles()`
+      // hierboven heeft dit bestand al goedgekeurd, dus er komt hier een
+      // waarde uit; de `??` is er voor het geval iemand deze functie ooit
+      // zonder die controle aanroept.
+      const mimeType = canonicalMimeType(file) ?? "application/octet-stream";
+
       const asset = await store.createAsset({
         organisationId,
         projectId,
         uploadedBy: userId,
         kind: "image",
         fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
+        mimeType,
         sizeInBytes: file.size,
       });
 
@@ -102,7 +126,9 @@ export async function uploadProjectAssets(input: {
       const stored = await storage.put({
         assetId: asset.id,
         fileName: file.name,
-        contentType: file.type,
+        // Ook hier de gecontroleerde waarde: de extensie van de opslagsleutel
+        // wordt eruit afgeleid, en die wil je niet door de client laten kiezen.
+        contentType: mimeType,
         data: new Uint8Array(await file.arrayBuffer()),
       });
 
@@ -122,6 +148,12 @@ export async function uploadProjectAssets(input: {
     throw error;
   }
 
+  if (!attachScenes) {
+    // Het project gaat onveranderd mee terug. De beller heeft het nodig — de
+    // editor leest er zijn scènes uit — en het scheelt hem een tweede verzoek.
+    return { assets, rejected, project };
+  }
+
   const style = templateStyle(project.templateId);
 
   const scenes: SceneInput[] = [
@@ -129,7 +161,10 @@ export async function uploadProjectAssets(input: {
     ...sortedScenes(project.scenes).map((scene) => ({ id: scene.id })),
     ...assets.map((asset) => ({
       assetId: asset.id,
-      durationInSeconds: secondsPerPhotoFor(null),
+      // Uit het template en niet uit een vaste waarde: de editor doet dat ook
+      // (`syncUploads`), en een foto die via de API binnenkomt hoort niet korter
+      // in beeld te blijven dan dezelfde foto via de sleepzone.
+      durationInSeconds: style.secondsPerPhoto,
       motion: style.motion,
       transition: style.transition,
     })),

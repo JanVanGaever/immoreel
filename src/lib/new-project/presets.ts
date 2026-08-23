@@ -16,8 +16,13 @@ export type GoalPreset = {
    * dat bij het formaat past.
    */
   templateId: ID;
-  /** Hoe lang elke foto in beeld blijft. */
-  secondsPerPhoto: number;
+  /**
+   * Hoe lang elke foto in beeld blijft, staat hier bewust *niet*. Dat komt uit
+   * het template (`templateStyle().secondsPerPhoto`), want dat is ook waar de
+   * editor het vandaan haalt voor elke foto die er later bij komt. Toen het op
+   * twee plekken stond, liepen ze uit elkaar: LinkedIn beloofde 3 seconden en
+   * "Zakelijk" maakte er 3,5 van, en WhatsApp 3 tegenover 4.
+   */
   /** Richtlijn in de fotostap; geen harde grens. */
   recommendedPhotos: number;
 };
@@ -39,7 +44,6 @@ export const GOAL_OPTIONS: GoalOption[] = [
     preset: {
       aspectRatio: "16:9",
       templateId: "tpl_klassiek",
-      secondsPerPhoto: 4,
       recommendedPhotos: 14,
     },
   },
@@ -51,7 +55,6 @@ export const GOAL_OPTIONS: GoalOption[] = [
     preset: {
       aspectRatio: "1:1",
       templateId: "tpl_zakelijk",
-      secondsPerPhoto: 3,
       recommendedPhotos: 10,
     },
   },
@@ -63,7 +66,6 @@ export const GOAL_OPTIONS: GoalOption[] = [
     preset: {
       aspectRatio: "9:16",
       templateId: "tpl_dynamisch",
-      secondsPerPhoto: 2.5,
       recommendedPhotos: 10,
     },
   },
@@ -75,7 +77,6 @@ export const GOAL_OPTIONS: GoalOption[] = [
     preset: {
       aspectRatio: "9:16",
       templateId: "tpl_snel",
-      secondsPerPhoto: 2,
       recommendedPhotos: 8,
     },
   },
@@ -87,7 +88,6 @@ export const GOAL_OPTIONS: GoalOption[] = [
     preset: {
       aspectRatio: "9:16",
       templateId: "tpl_klassiek",
-      secondsPerPhoto: 3,
       recommendedPhotos: 8,
     },
   },

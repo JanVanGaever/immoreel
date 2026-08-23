@@ -69,6 +69,19 @@ export type ProjectDraftController = {
   addPhotos(files: File[]): AddPhotosResult;
   removePhoto(photoId: ID): void;
   movePhoto(photoId: ID, offset: number): void;
+  /**
+   * De gekozen bestanden zelf, in de volgorde van het concept.
+   *
+   * `DraftPhoto` houdt alleen wat er op het scherm moet staan — naam, grootte,
+   * een blob-URL. De bytes horen niet in de state: ze zijn groot, ze zijn niet
+   * vergelijkbaar, en ze overleven `JSON.stringify` niet. Ze staan daarom in een
+   * ref, precies zoals `useUploads` dat doet, en komen er alleen uit op het
+   * moment dat ze geüpload worden.
+   *
+   * Foto's uit een teruggehaald concept zitten hier niet bij: die zijn nooit
+   * bewaard (zie `draft-storage.ts`), en `restoredPhotoCount` zegt dat ook.
+   */
+  files(): File[];
   /** Meteen bewaren, zonder te wachten op de autosave. */
   saveNow(): void;
   /** Concept weggooien en opnieuw beginnen. */
@@ -113,6 +126,8 @@ export function useProjectDraft(templates: Template[]): ProjectDraftController {
   const [restoredPhotoCount, setRestoredPhotoCount] = useState<number | null>(null);
 
   const previewUrls = useRef(new Set<string>());
+  /** De bestanden zelf, op het id van hun `DraftPhoto`. Zie `files()`. */
+  const filesRef = useRef(new Map<ID, File>());
 
   const raw = useSyncExternalStore(subscribeToStoredDraft, readRawDraft, serverSnapshot);
   const stored = useMemo(() => parseStoredDraft(raw), [raw]);
@@ -139,6 +154,7 @@ export function useProjectDraft(templates: Template[]): ProjectDraftController {
 
     URL.revokeObjectURL(photo.previewUrl);
     previewUrls.current.delete(photo.previewUrl);
+    filesRef.current.delete(photo.id);
   }, []);
 
   // Automatisch bewaren, maar pas zodra de gebruiker iets gewijzigd heeft:
@@ -151,13 +167,15 @@ export function useProjectDraft(templates: Template[]): ProjectDraftController {
     return () => clearTimeout(timer);
   }, [draft, started]);
 
-  // Blob-URL's vrijgeven wanneer de wizard verdwijnt.
+  // Blob-URL's vrijgeven en de bestanden loslaten wanneer de wizard verdwijnt.
   useEffect(() => {
     const urls = previewUrls.current;
+    const files = filesRef.current;
 
     return () => {
       urls.forEach((url) => URL.revokeObjectURL(url));
       urls.clear();
+      files.clear();
     };
   }, []);
 
@@ -231,7 +249,12 @@ export function useProjectDraft(templates: Template[]): ProjectDraftController {
         if (fits.length === 0) return current;
 
         const photos = fits.map(toDraftPhoto);
-        photos.forEach(trackPreview);
+        photos.forEach((photo, index) => {
+          trackPreview(photo);
+          // Het bestand bij zijn foto houden; `files()` haalt het er straks in
+          // de volgorde van het concept weer uit.
+          filesRef.current.set(photo.id, fits[index]!);
+        });
         added = photos.length;
 
         return addPhotosToDraft(current, photos);
@@ -276,6 +299,16 @@ export function useProjectDraft(templates: Template[]): ProjectDraftController {
 
   const forget = useCallback(() => clearStoredDraft(), []);
 
+  // De volgorde van het concept beslist, niet de volgorde waarin de bestanden
+  // binnenkwamen: wie in stap 5 een foto naar voren sleept, bedoelt dat.
+  const files = useCallback(
+    () =>
+      draft.photos
+        .map((photo) => filesRef.current.get(photo.id))
+        .filter((file): file is File => file !== undefined),
+    [draft.photos],
+  );
+
   return {
     draft,
     restorable,
@@ -290,6 +323,7 @@ export function useProjectDraft(templates: Template[]): ProjectDraftController {
     addPhotos,
     removePhoto,
     movePhoto,
+    files,
     saveNow,
     reset,
     forget,

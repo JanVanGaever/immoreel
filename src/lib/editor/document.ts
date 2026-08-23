@@ -1,8 +1,14 @@
+import { API_ROUTES } from "@/lib/constants";
 import { clampAudio, createAudio } from "@/lib/editor/audio";
 import { createBranding } from "@/lib/editor/branding";
 import { normaliseExportPresetIds } from "@/lib/editor/export-presets";
 import { normaliseMotion } from "@/lib/editor/motion";
-import { getTransition, templateStyle, type TransitionId } from "@/lib/editor/templates";
+import {
+  getTransition,
+  templateStyle,
+  type TemplateStyle,
+  type TransitionId,
+} from "@/lib/editor/templates";
 import type {
   AspectRatio,
   AudioSettings,
@@ -144,10 +150,16 @@ export function createScene(options: {
  * moeten opvragen. Zo is er geen enkel pad waarlangs een editor zonder
  * huisstijl kan ontstaan.
  *
- * De foto's zelf staan nog niet in object storage (zie `project-store.ts`),
- * dus een scène uit de databank heeft geen voorbeeld. Dat is zichtbaar in de
- * lijst in plaats van verstopt: een grijs kader met de bestandsnaam is
- * eerlijker dan een lege plek.
+ * Een scène met een foto krijgt hier het adres van die foto mee. Dat is niet
+ * altijd zo geweest, en het verschil is de moeite waard om te onthouden: zonder
+ * dat adres tekende de editor alleen wat er in dít tabblad geüpload was. Wie
+ * uit de wizard kwam of de pagina herlaadde, zag een tijdlijn met de juiste
+ * scènes en lege kaders erin — de foto's stonden er wél, er was alleen niets
+ * dat ernaar wees.
+ *
+ * Een scène zonder foto houdt `previewUrl: null` en blijft een grijs kader.
+ * Dat is geen fout maar de neutrale stand: zo staan de demoprojecten in
+ * `db/seed/projects.ts`, en zo ziet een upload eruit die halverwege afbrak.
  */
 export function toEditorDocument(project: VideoProject, brand: BrandKit): EditorDocument {
   const style = templateStyle(project.templateId);
@@ -164,9 +176,22 @@ export function toEditorDocument(project: VideoProject, brand: BrandKit): Editor
         durationInSeconds: clampSceneSeconds(scene.durationInSeconds),
         motion: normaliseMotion(scene.motion ?? style.motion),
         transition: scene.transition ?? style.transition,
+        // `assetId: null` blijft hier bewust de neutrale stand en wordt geen
+        // fout. Uit de bewaarde rij alleen is niet te zien of deze scène nooit
+        // een foto had (zo staan de demoprojecten in `db/seed/projects.ts`, en
+        // zo staat elk project van vóór de uploads erin) of dat een upload
+        // halverwege afbrak. Alles rood kleuren maakt het eerste geval kapot om
+        // het tweede te kunnen tonen. Wat de gebruiker ziet is een grijs kader
+        // met de bestandsnaam — leeg, en dat is precies wat het is.
+        //
+        // Is er wél een foto, dan wijst `previewUrl` naar `/api/assets/:id`.
+        // Geen blob-URL: die hoort bij één tabblad en is na een herlaadbeurt
+        // niets meer waard. Dit adres overleeft dat, en de route erachter
+        // controleert nog steeds of deze foto van dit kantoor is.
         source: createSceneSource({
           assetId: scene.assetId ?? null,
           fileName: `Foto ${index + 1}`,
+          previewUrl: scene.assetId ? API_ROUTES.asset(scene.assetId) : null,
         }),
       })),
     brand,
@@ -259,14 +284,23 @@ export function buildTimeline(document: EditorDocument): Timeline {
     });
   }
 
-  const overlap = getTransition(projectTransition(document) ?? style.transition).durationInSeconds;
   const segments: TimelineSegment[] = [];
   let cursor = 0;
 
   for (const [index, block] of blocks.entries()) {
     // Elk blok behalve het eerste begint iets vroeger: het loopt over het
     // vorige heen zolang de overgang duurt.
-    const start = index === 0 ? 0 : Math.max(cursor - overlap, 0);
+    //
+    // De overgang komt van het blok zelf en niet van het project als geheel.
+    // Dat is niet altijd zo geweest: er stond hier één overlap voor de hele
+    // tijdlijn, en zodra twee scènes een verschillende overgang hadden viel dat
+    // terug op die van het template. Wie in de editor één scène op "harde cut"
+    // zette, zag daar niets van — niet in de tijdlijn, niet in de preview — en
+    // kreeg wél een gerenderde video waarin het klopte. `buildRenderPlan()`
+    // rekende namelijk altijd al per scène.
+    const overlap = index === 0 ? 0 : overlapFor(block, document, style);
+
+    const start = Math.max(cursor - overlap, 0);
 
     segments.push({ ...block, startInSeconds: start });
     cursor = start + block.durationInSeconds;
@@ -288,6 +322,33 @@ export function scenesDuration(document: EditorDocument): number {
  * De overgang van het project: die van de scènes als ze het eens zijn,
  * anders `null` ("gemengd"). Zo hoeft er geen tweede waarde bewaard te worden
  * die met de scènes uit de pas kan lopen.
+ */
+/**
+ * Hoe lang dit blok over het vorige heen loopt.
+ *
+ * Voor een scène is dat haar eigen overgang — precies de regel die
+ * `buildRenderPlan()` hanteert, zodat de tijdlijn, de preview en de gerenderde
+ * video het over dezelfde video hebben. De intro- en contactkaart hebben geen
+ * scène en volgen het template.
+ */
+export function overlapFor(
+  block: Pick<TimelineSegment, "kind" | "sceneId">,
+  document: EditorDocument,
+  style: TemplateStyle,
+): number {
+  const scene = block.sceneId ? findScene(document, block.sceneId) : null;
+  const transition = (scene?.transition as TransitionId | null) ?? style.transition;
+
+  return getTransition(transition).durationInSeconds;
+}
+
+/**
+ * De overgang van het project, als alle scènes dezelfde hebben.
+ *
+ * Alleen nog om iets over het geheel te kúnnen zeggen — een keuzelijst die
+ * "gemengd" moet tonen, bijvoorbeeld. Voor het bouwen van een tijdlijn of een
+ * plan hoort dit níet gebruikt te worden: daar telt de overgang van elke scène
+ * apart.
  */
 export function projectTransition(document: EditorDocument): TransitionId | null {
   const [first, ...rest] = document.scenes;

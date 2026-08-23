@@ -21,7 +21,8 @@ import {
   type SelectMode,
 } from "@/lib/editor/state";
 import { templateStyle, type TemplateStyle, type TransitionId } from "@/lib/editor/templates";
-import type { UploadTransport } from "@/lib/uploads/transport";
+import { API_ROUTES } from "@/lib/constants";
+import { createXhrTransport, type UploadTransport } from "@/lib/uploads/transport";
 import type {
   AspectRatio,
   AudioSettings,
@@ -49,7 +50,13 @@ export type UseEditorOptions = {
   projectId: ID;
   initialDocument: EditorDocument;
   templates: Template[];
-  /** Waar geüploade foto's heen gaan; standaard de nagebootste transport. */
+  /**
+   * Waar geüploade foto's heen gaan. Standaard naar de assetroute van dit
+   * project; meegeven doe je alleen om die te vervangen, bijvoorbeeld in een
+   * test. Bewust een standaard en geen verplichte prop: een editor die per
+   * ongeluk zonder transport gebouwd wordt, is een editor waarin foto's
+   * verdwijnen zonder dat iemand het merkt.
+   */
   transport?: UploadTransport;
 };
 
@@ -113,7 +120,15 @@ export function useEditor({
   const reducer = useMemo(() => createEditorReducer(templates), [templates]);
   const [state, dispatch] = useReducer(reducer, initialDocument, createEditorState);
 
-  const uploads = useUploads({ transport: transport ?? noopTransport });
+  // `scenes: "none"`: de scène is hier al gemaakt op het moment dat de foto in
+  // de sleepzone viel, dus de route hoeft er geen tweede achteraan te hangen.
+  // Zie `uploadProjectAssets()` — één eigenaar van de tijdlijn, en dat is deze.
+  const defaultTransport = useMemo(
+    () => createXhrTransport({ endpoint: API_ROUTES.projectAssets(projectId, { scenes: "none" }) }),
+    [projectId],
+  );
+
+  const uploads = useUploads({ transport: transport ?? defaultTransport });
 
   // Uploads worden scènes. Eén effect, één richting.
   useEffect(() => {
@@ -232,13 +247,3 @@ export function useEditor({
   };
 }
 
-/**
- * Zonder opslag is er niets om naartoe te uploaden. De foto blijft dan als
- * blob-URL in dit tabblad staan: de editor werkt volledig, maar niemand doet
- * alsof het bestand ergens veilig staat.
- */
-const noopTransport: UploadTransport = async ({ onProgress }) => {
-  onProgress(100);
-
-  return {};
-};

@@ -53,7 +53,7 @@ export function ColorField({
           onChange={(event) => onChange(event.target.value)}
           onBlur={onBlur}
           className={cn(
-            "size-9 shrink-0 cursor-pointer rounded-md border border-border bg-surface p-1",
+            "size-[var(--control-md)] shrink-0 cursor-pointer rounded-md border border-border bg-surface p-1",
             "disabled:cursor-not-allowed disabled:opacity-55",
           )}
         />

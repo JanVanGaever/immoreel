@@ -61,7 +61,7 @@ export function CheckoutForm({ plan, subscription, isTestMode, isConfigured }: C
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid items-start gap-6 lg:grid-cols-[1fr_20rem]">
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="space-y-4">
         {!isConfigured ? (
           <Alert variant="warning" title="Betalingen staan nog niet aan">

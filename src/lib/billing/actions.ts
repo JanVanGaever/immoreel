@@ -8,7 +8,6 @@ import { isPaymentMethodId } from "@/lib/billing/methods";
 import { getPlan, isPlanId } from "@/lib/billing/plans";
 import {
   applyPlanChange,
-  applyPayment,
   cancelAtPeriodEnd,
   loadSubscription,
   resumeSubscription,
@@ -155,39 +154,6 @@ export async function resumeSubscriptionAction(): Promise<BillingActionState> {
     return {
       status: "gelukt",
       message: `Je abonnement loopt gewoon door en verlengt op ${formatDate(subscription.currentPeriodEnd)}.`,
-    };
-  } catch (error) {
-    return { status: "fout", message: mollieMessage(error) };
-  }
-}
-
-/**
- * De stand van een betaling ophalen bij Mollie en verwerken.
- *
- * De terugkeerpagina gebruikt dit omdat de webhook er niet altijd eerst is — en
- * bij ontwikkelen op `localhost` zelfs helemaal nooit. Dezelfde functie als de
- * webhook draait, dus dit is geen tweede waarheid maar dezelfde, alleen eerder
- * opgevraagd.
- */
-export async function syncPaymentAction(paymentId: string): Promise<BillingActionState> {
-  const { organisation } = await assertPermission("billing:manage");
-
-  if (!/^tr_[A-Za-z0-9]+$/.test(paymentId)) {
-    return { status: "fout", message: "Onbekende betaling." };
-  }
-
-  try {
-    await applyPayment(paymentId);
-    revalidateBilling();
-
-    const subscription = await loadSubscription(organisation.id);
-
-    return {
-      status: "gelukt",
-      message:
-        subscription.status === "actief"
-          ? "De betaling is bevestigd."
-          : "We wachten nog op je bank.",
     };
   } catch (error) {
     return { status: "fout", message: mollieMessage(error) };

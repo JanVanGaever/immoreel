@@ -53,7 +53,7 @@ export function Topbar({ user, organisation, role, onMenuClick }: TopbarProps) {
         <Link
           href={ROUTES.newProject}
           aria-label="Nieuwe video"
-          className={buttonClasses("primary", "sm", "max-sm:size-[var(--control-sm)] max-sm:px-0")}
+          className={buttonClasses("primary", "sm", "max-sm:size-[var(--control-md)] max-sm:px-0")}
         >
           <Plus />
           <span className="hidden sm:inline">Nieuwe video</span>
@@ -68,7 +68,7 @@ export function Topbar({ user, organisation, role, onMenuClick }: TopbarProps) {
               <button
                 type="button"
                 aria-label="Accountmenu"
-                className="flex items-center gap-2.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-surface-subtle"
+                className="flex min-h-[var(--control-md)] items-center justify-center gap-2.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-surface-subtle max-md:min-w-[var(--control-md)] md:justify-start"
               >
                 <Avatar name={user.name} src={user.avatarUrl} size="sm" />
                 <span className="hidden leading-tight md:block">
